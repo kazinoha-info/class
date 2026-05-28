@@ -12,7 +12,7 @@
         
         <div class="w-1/2 flex flex-col justify-center items-center border-r border-gray-700 p-8 bg-gray-800">
             
-            <div class="mb-8 bg-gray-700 p-1 rounded-lg flex space-x-2">
+            <div class="mb-6 bg-gray-700 p-1 rounded-lg flex space-x-2">
                 <button id="mode-down-btn" class="px-4 py-2 rounded-md bg-blue-600 text-white font-bold transition">
                     カウントダウン
                 </button>
@@ -21,8 +21,20 @@
                 </button>
             </div>
 
-            <div id="timer-display" class="text-9xl font-mono font-bold tracking-wider text-yellow-400 mb-12 select-none">
+            <div id="timer-display" class="text-9xl font-mono font-bold tracking-wider text-yellow-400 mb-4 select-none">
                 10:00
+            </div>
+
+            <div class="flex items-center space-x-2 mb-10 text-xl bg-gray-700 p-3 rounded-xl shadow-inner">
+                <input id="input-minutes" type="number" min="0" max="999" value="10" 
+                    class="w-16 bg-gray-800 text-center font-bold text-yellow-400 rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                <span class="text-gray-400 font-bold">分</span>
+                <input id="input-seconds" type="number" min="0" max="59" value="0" 
+                    class="w-16 bg-gray-800 text-center font-bold text-yellow-400 rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                <span class="text-gray-400 font-bold">秒</span>
+                <button id="set-time-btn" class="ml-2 px-3 py-1 bg-gray-600 hover:bg-gray-500 text-sm font-bold rounded transition">
+                    設定
+                </button>
             </div>
 
             <div class="flex space-x-6">
@@ -54,15 +66,20 @@
         let isRunning = false;
         let mode = 'countdown'; // 'countdown' または 'countup'
         
-        // 秒単位で管理（カウントダウン初期値: 10分 = 600秒）
-        let defaultCountdownTime = 600; 
-        let currentTime = defaultCountdownTime;
+        // 設定された基準の時間を保持する変数（デフォルトは10分 = 600秒）
+        let baseTime = 600; 
+        let currentTime = baseTime;
 
         const display = document.getElementById('timer-display');
         const startPauseBtn = document.getElementById('start-pause-btn');
         const resetBtn = document.getElementById('reset-btn');
         const modeDownBtn = document.getElementById('mode-down-btn');
         const modeUpBtn = document.getElementById('mode-up-btn');
+        
+        // 時間設定用の要素
+        const inputMinutes = document.getElementById('input-minutes');
+        const inputSeconds = document.getElementById('input-seconds');
+        const setTimeBtn = document.getElementById('set-time-btn');
 
         // 時間を「分:秒」のフォーマットに変換する関数
         function updateDisplay() {
@@ -72,7 +89,6 @@
                 String(minutes).padStart(2, '0') + ':' + 
                 String(seconds).padStart(2, '0');
             
-            // カウントダウンでゼロ以下になった場合のマイナス表示（必要に応じて）
             display.textContent = (currentTime < 0 ? '-' : '') + formatted;
         }
 
@@ -82,10 +98,7 @@
                 currentTime--;
                 if (currentTime <= 0) {
                     currentTime = 0;
-                    clearInterval(timer);
-                    isRunning = false;
-                    startPauseBtn.textContent = '開始';
-                    startPauseBtn.className = startPauseBtn.className.replace('bg-amber-600', 'bg-emerald-600');
+                    pauseTimer();
                 }
             } else {
                 currentTime++;
@@ -93,33 +106,45 @@
             updateDisplay();
         }
 
+        // 一時停止する共通処理
+        function pauseTimer() {
+            clearInterval(timer);
+            isRunning = false;
+            startPauseBtn.textContent = '開始';
+            startPauseBtn.classList.remove('bg-amber-600', 'hover:bg-amber-500');
+            startPauseBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+        }
+
         // 開始・一時停止ボタンのクリックイベント
         startPauseBtn.addEventListener('click', () => {
             if (isRunning) {
-                // 一時停止
-                clearInterval(timer);
-                startPauseBtn.textContent = '開始';
-                startPauseBtn.classList.remove('bg-amber-600', 'hover:bg-amber-500');
-                startPauseBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+                pauseTimer();
             } else {
                 // スタート
                 timer = setInterval(tick, 1000);
                 startPauseBtn.textContent = '一時停止';
                 startPauseBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500');
                 startPauseBtn.classList.add('bg-amber-600', 'hover:bg-amber-500');
+                isRunning = true;
             }
-            isRunning = !isRunning;
         });
 
         // リセットボタンのクリックイベント
         resetBtn.addEventListener('click', () => {
-            clearInterval(timer);
-            isRunning = false;
-            startPauseBtn.textContent = '開始';
-            startPauseBtn.classList.remove('bg-amber-600', 'hover:bg-amber-500');
-            startPauseBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+            pauseTimer();
+            currentTime = baseTime;
+            updateDisplay();
+        });
+
+        // 🛠️ 「設定」ボタンを押した時に時間を更新する処理
+        setTimeBtn.addEventListener('click', () => {
+            pauseTimer();
+            const mins = parseInt(inputMinutes.value) || 0;
+            const secs = parseInt(inputSeconds.value) || 0;
             
-            currentTime = (mode === 'countdown') ? defaultCountdownTime : 0;
+            // 全て秒に変換してベース時間を更新
+            baseTime = (mins * 60) + secs;
+            currentTime = baseTime;
             updateDisplay();
         });
 
@@ -128,13 +153,16 @@
             if (mode === 'countdown') return;
             mode = 'countdown';
             
-            // ボタンの見た目切り替え
             modeDownBtn.classList.add('bg-blue-600', 'text-white');
             modeDownBtn.classList.remove('text-gray-400');
             modeUpBtn.classList.remove('bg-blue-600', 'text-white');
             modeUpBtn.classList.add('text-gray-400');
             
-            // リセット処理
+            // カウントダウンに切り替えるときは、入力されている時間をベースにする
+            const mins = parseInt(inputMinutes.value) || 0;
+            const secs = parseInt(inputSeconds.value) || 0;
+            baseTime = (mins * 60) + secs;
+            
             resetBtn.click();
         });
 
@@ -143,13 +171,14 @@
             if (mode === 'countup') return;
             mode = 'countup';
             
-            // ボタンの見た目切り替え
             modeUpBtn.classList.add('bg-blue-600', 'text-white');
             modeUpBtn.classList.remove('text-gray-400');
             modeDownBtn.classList.remove('bg-blue-600', 'text-white');
             modeDownBtn.classList.add('text-gray-400');
             
-            // リセット処理
+            // カウントアップに切り替えるときは、基本 00:00 スタートにする（入力値をスタートにしたい場合は baseTime = (mins*60)+secs に変更も可）
+            baseTime = 0;
+            
             resetBtn.click();
         });
 
