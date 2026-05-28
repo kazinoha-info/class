@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>メインダッシュボード</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white font-sans min-height-screen">
+
+    <div class="flex h-screen w-screen">
+        
+        <div class="w-1/2 flex flex-col justify-center items-center border-r border-gray-700 p-8 bg-gray-800">
+            
+            <div class="mb-8 bg-gray-700 p-1 rounded-lg flex space-x-2">
+                <button id="mode-down-btn" class="px-4 py-2 rounded-md bg-blue-600 text-white font-bold transition">
+                    カウントダウン
+                </button>
+                <button id="mode-up-btn" class="px-4 py-2 rounded-md text-gray-400 hover:text-white font-bold transition">
+                    カウントアップ
+                </button>
+            </div>
+
+            <div id="timer-display" class="text-9xl font-mono font-bold tracking-wider text-yellow-400 mb-12 select-none">
+                10:00
+            </div>
+
+            <div class="flex space-x-6">
+                <button id="start-pause-btn" class="w-40 py-4 bg-emerald-600 hover:bg-emerald-500 text-xl font-bold rounded-xl shadow-lg transition transform active:scale-95">
+                    開始
+                </button>
+                <button id="reset-btn" class="w-40 py-4 bg-rose-600 hover:bg-rose-500 text-xl font-bold rounded-xl shadow-lg transition transform active:scale-95">
+                    リセット
+                </button>
+            </div>
+
+        </div>
+
+        <div class="w-1/2 flex flex-col justify-center items-center p-8 relative bg-gray-900">
+            <p class="text-gray-500 text-lg mb-4">右半分：三角形配置エリア（予定）</p>
+            <div class="text-center text-gray-400 max-w-sm">
+                ここに頂点A・B・Cのタイマーが並び、Firebaseを通じて別サイトからリアルタイム操作されます。
+            </div>
+            
+            <div class="absolute inset-0 flex justify-center items-center pointer-events-none opacity-20">
+                <div class="w-0 h-0 border-l-[150px] border-l-transparent border-r-[150px] border-r-transparent border-b-[260px] border-b-white"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let timer = null;
+        let isRunning = false;
+        let mode = 'countdown'; // 'countdown' または 'countup'
+        
+        // 秒単位で管理（カウントダウン初期値: 10分 = 600秒）
+        let defaultCountdownTime = 600; 
+        let currentTime = defaultCountdownTime;
+
+        const display = document.getElementById('timer-display');
+        const startPauseBtn = document.getElementById('start-pause-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const modeDownBtn = document.getElementById('mode-down-btn');
+        const modeUpBtn = document.getElementById('mode-up-btn');
+
+        // 時間を「分:秒」のフォーマットに変換する関数
+        function updateDisplay() {
+            const minutes = Math.floor(Math.abs(currentTime) / 60);
+            const seconds = Math.floor(Math.abs(currentTime) % 60);
+            const formatted = 
+                String(minutes).padStart(2, '0') + ':' + 
+                String(seconds).padStart(2, '0');
+            
+            // カウントダウンでゼロ以下になった場合のマイナス表示（必要に応じて）
+            display.textContent = (currentTime < 0 ? '-' : '') + formatted;
+        }
+
+        // タイマーのカウント処理
+        function tick() {
+            if (mode === 'countdown') {
+                currentTime--;
+                if (currentTime <= 0) {
+                    currentTime = 0;
+                    clearInterval(timer);
+                    isRunning = false;
+                    startPauseBtn.textContent = '開始';
+                    startPauseBtn.className = startPauseBtn.className.replace('bg-amber-600', 'bg-emerald-600');
+                }
+            } else {
+                currentTime++;
+            }
+            updateDisplay();
+        }
+
+        // 開始・一時停止ボタンのクリックイベント
+        startPauseBtn.addEventListener('click', () => {
+            if (isRunning) {
+                // 一時停止
+                clearInterval(timer);
+                startPauseBtn.textContent = '開始';
+                startPauseBtn.classList.remove('bg-amber-600', 'hover:bg-amber-500');
+                startPauseBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+            } else {
+                // スタート
+                timer = setInterval(tick, 1000);
+                startPauseBtn.textContent = '一時停止';
+                startPauseBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500');
+                startPauseBtn.classList.add('bg-amber-600', 'hover:bg-amber-500');
+            }
+            isRunning = !isRunning;
+        });
+
+        // リセットボタンのクリックイベント
+        resetBtn.addEventListener('click', () => {
+            clearInterval(timer);
+            isRunning = false;
+            startPauseBtn.textContent = '開始';
+            startPauseBtn.classList.remove('bg-amber-600', 'hover:bg-amber-500');
+            startPauseBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+            
+            currentTime = (mode === 'countdown') ? defaultCountdownTime : 0;
+            updateDisplay();
+        });
+
+        // モード切り替え：カウントダウン
+        modeDownBtn.addEventListener('click', () => {
+            if (mode === 'countdown') return;
+            mode = 'countdown';
+            
+            // ボタンの見た目切り替え
+            modeDownBtn.classList.add('bg-blue-600', 'text-white');
+            modeDownBtn.classList.remove('text-gray-400');
+            modeUpBtn.classList.remove('bg-blue-600', 'text-white');
+            modeUpBtn.classList.add('text-gray-400');
+            
+            // リセット処理
+            resetBtn.click();
+        });
+
+        // モード切り替え：カウントアップ
+        modeUpBtn.addEventListener('click', () => {
+            if (mode === 'countup') return;
+            mode = 'countup';
+            
+            // ボタンの見た目切り替え
+            modeUpBtn.classList.add('bg-blue-600', 'text-white');
+            modeUpBtn.classList.remove('text-gray-400');
+            modeDownBtn.classList.remove('bg-blue-600', 'text-white');
+            modeDownBtn.classList.add('text-gray-400');
+            
+            // リセット処理
+            resetBtn.click();
+        });
+
+        // 初期表示
+        updateDisplay();
+    </script>
+</body>
+</html>
