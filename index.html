@@ -8,7 +8,7 @@
 </head>
 <body class="bg-gray-900 text-white font-sans min-height-screen">
 
-    <div class="flex h-screen w-screen">
+    <div class="flex h-screen w-screen m-0 p-0 overflow-hidden">
         
         <div class="w-1/2 flex flex-col justify-center items-center border-r border-gray-700 p-8 bg-gray-800">
             
@@ -48,15 +48,30 @@
 
         </div>
 
-        <div class="w-1/2 flex flex-col justify-center items-center p-8 relative bg-gray-900">
-            <p class="text-gray-500 text-lg mb-4">右半分：三角形配置エリア（予定）</p>
-            <div class="text-center text-gray-400 max-w-sm">
-                ここに頂点A・B・Cのタイマーが並び、Firebaseを通じて別サイトからリアルタイム操作されます。
-            </div>
+        <div class="w-1/2 flex justify-center items-center p-8 bg-gray-900 relative">
             
-            <div class="absolute inset-0 flex justify-center items-center pointer-events-none opacity-20">
-                <div class="w-0 h-0 border-l-[150px] border-l-transparent border-r-[150px] border-r-transparent border-b-[260px] border-b-white"></div>
+            <div class="relative w-[400px] h-[400px]">
+                
+                <div class="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center bg-gray-800/80 border border-cyan-500 p-4 rounded-2xl w-40 shadow-xl">
+                    <span class="text-xs font-bold text-cyan-400 tracking-wider mb-1">SITE A</span>
+                    <div id="sub-timer-a" class="text-3xl font-mono font-bold text-white">00:00</div>
+                    <span class="text-[10px] text-gray-500 mt-1">待機中</span>
+                </div>
+
+                <div class="absolute bottom-[10%] left-0 flex flex-col items-center bg-gray-800/80 border border-emerald-500 p-4 rounded-2xl w-40 shadow-xl">
+                    <span class="text-xs font-bold text-emerald-400 tracking-wider mb-1">SITE B</span>
+                    <div id="sub-timer-b" class="text-3xl font-mono font-bold text-white">00:00</div>
+                    <span class="text-[10px] text-gray-500 mt-1">待機中</span>
+                </div>
+
+                <div class="absolute bottom-[10%] right-0 flex flex-col items-center bg-gray-800/80 border border-amber-500 p-4 rounded-2xl w-40 shadow-xl">
+                    <span class="text-xs font-bold text-amber-400 tracking-wider mb-1">SITE C</span>
+                    <div id="sub-timer-c" class="text-3xl font-mono font-bold text-white">00:00</div>
+                    <span class="text-[10px] text-gray-500 mt-1">待機中</span>
+                </div>
+
             </div>
+
         </div>
 
     </div>
@@ -64,9 +79,7 @@
     <script>
         let timer = null;
         let isRunning = false;
-        let mode = 'countdown'; // 'countdown' または 'countup'
-        
-        // 設定された基準の時間を保持する変数（デフォルトは10分 = 600秒）
+        let mode = 'countdown';
         let baseTime = 600; 
         let currentTime = baseTime;
 
@@ -75,114 +88,46 @@
         const resetBtn = document.getElementById('reset-btn');
         const modeDownBtn = document.getElementById('mode-down-btn');
         const modeUpBtn = document.getElementById('mode-up-btn');
-        
-        // 時間設定用の要素
         const inputMinutes = document.getElementById('input-minutes');
         const inputSeconds = document.getElementById('input-seconds');
         const setTimeBtn = document.getElementById('set-time-btn');
 
-        // 時間を「分:秒」のフォーマットに変換する関数
         function updateDisplay() {
             const minutes = Math.floor(Math.abs(currentTime) / 60);
             const seconds = Math.floor(Math.abs(currentTime) % 60);
-            const formatted = 
-                String(minutes).padStart(2, '0') + ':' + 
-                String(seconds).padStart(2, '0');
-            
-            display.textContent = (currentTime < 0 ? '-' : '') + formatted;
+            display.textContent = (currentTime < 0 ? '-' : '') + String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
         }
 
-        // タイマーのカウント処理
         function tick() {
             if (mode === 'countdown') {
                 currentTime--;
-                if (currentTime <= 0) {
-                    currentTime = 0;
-                    pauseTimer();
-                }
-            } else {
-                currentTime++;
-            }
+                if (currentTime <= 0) { currentTime = 0; pauseTimer(); }
+            } else { currentTime++; }
             updateDisplay();
         }
 
-        // 一時停止する共通処理
         function pauseTimer() {
             clearInterval(timer);
             isRunning = false;
             startPauseBtn.textContent = '開始';
-            startPauseBtn.classList.remove('bg-amber-600', 'hover:bg-amber-500');
-            startPauseBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+            startPauseBtn.className = startPauseBtn.className.replace('bg-amber-600', 'bg-emerald-600');
         }
 
-        // 開始・一時停止ボタンのクリックイベント
         startPauseBtn.addEventListener('click', () => {
-            if (isRunning) {
-                pauseTimer();
-            } else {
-                // スタート
+            if (isRunning) { pauseTimer(); } 
+            else {
                 timer = setInterval(tick, 1000);
                 startPauseBtn.textContent = '一時停止';
-                startPauseBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500');
-                startPauseBtn.classList.add('bg-amber-600', 'hover:bg-amber-500');
+                startPauseBtn.className = startPauseBtn.className.replace('bg-emerald-600', 'bg-amber-600');
                 isRunning = true;
             }
         });
 
-        // リセットボタンのクリックイベント
-        resetBtn.addEventListener('click', () => {
-            pauseTimer();
-            currentTime = baseTime;
-            updateDisplay();
-        });
-
-        // 🛠️ 「設定」ボタンを押した時に時間を更新する処理
-        setTimeBtn.addEventListener('click', () => {
-            pauseTimer();
-            const mins = parseInt(inputMinutes.value) || 0;
-            const secs = parseInt(inputSeconds.value) || 0;
-            
-            // 全て秒に変換してベース時間を更新
-            baseTime = (mins * 60) + secs;
-            currentTime = baseTime;
-            updateDisplay();
-        });
-
-        // モード切り替え：カウントダウン
-        modeDownBtn.addEventListener('click', () => {
-            if (mode === 'countdown') return;
-            mode = 'countdown';
-            
-            modeDownBtn.classList.add('bg-blue-600', 'text-white');
-            modeDownBtn.classList.remove('text-gray-400');
-            modeUpBtn.classList.remove('bg-blue-600', 'text-white');
-            modeUpBtn.classList.add('text-gray-400');
-            
-            // カウントダウンに切り替えるときは、入力されている時間をベースにする
-            const mins = parseInt(inputMinutes.value) || 0;
-            const secs = parseInt(inputSeconds.value) || 0;
-            baseTime = (mins * 60) + secs;
-            
-            resetBtn.click();
-        });
-
-        // モード切り替え：カウントアップ
-        modeUpBtn.addEventListener('click', () => {
-            if (mode === 'countup') return;
-            mode = 'countup';
-            
-            modeUpBtn.classList.add('bg-blue-600', 'text-white');
-            modeUpBtn.classList.remove('text-gray-400');
-            modeDownBtn.classList.remove('bg-blue-600', 'text-white');
-            modeDownBtn.classList.add('text-gray-400');
-            
-            // カウントアップに切り替えるときは、基本 00:00 スタートにする（入力値をスタートにしたい場合は baseTime = (mins*60)+secs に変更も可）
-            baseTime = 0;
-            
-            resetBtn.click();
-        });
-
-        // 初期表示
+        resetBtn.addEventListener('click', () => { pauseTimer(); currentTime = baseTime; updateDisplay(); });
+        setTimeBtn.addEventListener('click', () => { pauseTimer(); baseTime = (parseInt(inputMinutes.value)||0)*60 + (parseInt(inputSeconds.value)||0); currentTime = baseTime; updateDisplay(); });
+        modeDownBtn.addEventListener('click', () => { if (mode === 'countdown') return; mode = 'countdown'; modeDownBtn.classList.add('bg-blue-600','text-white'); modeUpBtn.classList.remove('bg-blue-600','text-white'); resetBtn.click(); });
+        modeUpBtn.addEventListener('click', () => { if (mode === 'countup') return; mode = 'countup'; modeUpBtn.classList.add('bg-blue-600','text-white'); modeDownBtn.classList.remove('bg-blue-600','text-white'); baseTime = 0; resetBtn.click(); });
+        
         updateDisplay();
     </script>
 </body>
