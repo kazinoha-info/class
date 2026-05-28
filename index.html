@@ -5,69 +5,102 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>メインダッシュボード</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 色の同時選択（重ね合わせ）を綺麗に表現するためのスタイル */
+        .color-red { border-color: #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.5); }
+        .color-yellow { border-color: #eab308; box-shadow: 0 0 15px rgba(234, 179, 8, 0.5); }
+        .color-blue { border-color: #3b82f6; box-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
+        /* 複数選択時はグラデーションにするためのクラス */
+        .color-mixed { border-color: transparent; background-image: linear-gradient(#1f2937, #1f2937), linear-gradient(135deg, #ef4444, #eab308, #3b82f6); background-origin: border-box; background-clip: padding-box, border-box; box-shadow: 0 0 20px rgba(255, 255, 255, 0.2); }
+    </style>
 </head>
-<body class="bg-gray-900 text-white font-sans min-height-screen">
+<body class="bg-gray-900 text-white font-sans min-h-screen m-0 p-0 overflow-hidden relative">
 
-    <div class="flex h-screen w-screen m-0 p-0 overflow-hidden">
+    <div id="timeup-screen" class="hidden fixed inset-0 bg-red-700 flex flex-col justify-center items-center z-50 animate-pulse">
+        <h1 class="text-9xl font-black tracking-widest text-white drop-shadow-[0_5px_5px_rgba(0,0,0,0.5)]">TIME UP！</h1>
+        <button id="back-btn" class="absolute bottom-6 right-6 px-6 py-3 bg-gray-900/80 hover:bg-gray-900 text-sm font-bold rounded-lg border border-white/20 transition transform active:scale-95">
+            戻る
+        </button>
+    </div>
+
+    <div id="main-content" class="flex h-screen w-screen">
         
-        <div class="w-1/2 flex flex-col justify-center items-center border-r border-gray-700 p-8 bg-gray-800">
+        <div class="w-1/3 flex flex-col justify-center items-center border-r border-gray-700 p-6 bg-gray-800 z-10">
             
             <div class="mb-6 bg-gray-700 p-1 rounded-lg flex space-x-2">
-                <button id="mode-down-btn" class="px-4 py-2 rounded-md bg-blue-600 text-white font-bold transition">
+                <button id="mode-down-btn" class="px-4 py-2 rounded-md bg-blue-600 text-white font-bold text-sm transition">
                     カウントダウン
                 </button>
-                <button id="mode-up-btn" class="px-4 py-2 rounded-md text-gray-400 hover:text-white font-bold transition">
+                <button id="mode-up-btn" class="px-4 py-2 rounded-md text-gray-400 hover:text-white font-bold text-sm transition">
                     カウントアップ
                 </button>
             </div>
 
-            <div id="timer-display" class="text-9xl font-mono font-bold tracking-wider text-yellow-400 mb-4 select-none">
-                10:00
+            <div id="timer-display" class="text-8xl font-mono font-bold tracking-wider text-yellow-400 mb-4 select-none">
+                00:03
             </div>
 
-            <div class="flex items-center space-x-2 mb-10 text-xl bg-gray-700 p-3 rounded-xl shadow-inner">
-                <input id="input-minutes" type="number" min="0" max="999" value="10" 
-                    class="w-16 bg-gray-800 text-center font-bold text-yellow-400 rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
-                <span class="text-gray-400 font-bold">分</span>
-                <input id="input-seconds" type="number" min="0" max="59" value="0" 
-                    class="w-16 bg-gray-800 text-center font-bold text-yellow-400 rounded p-1 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
-                <span class="text-gray-400 font-bold">秒</span>
-                <button id="set-time-btn" class="ml-2 px-3 py-1 bg-gray-600 hover:bg-gray-500 text-sm font-bold rounded transition">
+            <div class="flex items-center space-x-2 mb-10 text-base bg-gray-700 p-3 rounded-xl shadow-inner">
+                <input id="input-minutes" type="number" min="0" max="999" value="0" 
+                    class="w-14 bg-gray-800 text-center font-bold text-yellow-400 rounded p-1 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                <span class="text-gray-400 font-bold text-sm">分</span>
+                <input id="input-seconds" type="number" min="0" max="59" value="3" 
+                    class="w-14 bg-gray-800 text-center font-bold text-yellow-400 rounded p-1 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                <span class="text-gray-400 font-bold text-sm">秒</span>
+                <button id="set-time-btn" class="ml-2 px-3 py-1 bg-gray-600 hover:bg-gray-500 text-xs font-bold rounded transition">
                     設定
                 </button>
             </div>
 
-            <div class="flex space-x-6">
-                <button id="start-pause-btn" class="w-40 py-4 bg-emerald-600 hover:bg-emerald-500 text-xl font-bold rounded-xl shadow-lg transition transform active:scale-95">
+            <div class="flex space-x-4">
+                <button id="start-pause-btn" class="w-32 py-3 bg-emerald-600 hover:bg-emerald-500 text-lg font-bold rounded-xl shadow-lg transition transform active:scale-95">
                     開始
                 </button>
-                <button id="reset-btn" class="w-40 py-4 bg-rose-600 hover:bg-rose-500 text-xl font-bold rounded-xl shadow-lg transition transform active:scale-95">
+                <button id="reset-btn" class="w-32 py-3 bg-rose-600 hover:bg-rose-500 text-lg font-bold rounded-xl shadow-lg transition transform active:scale-95">
                     リセット
                 </button>
             </div>
 
         </div>
 
-        <div class="w-1/2 flex justify-center items-center p-8 bg-gray-900 relative">
+        <div class="w-2/3 flex justify-center items-center p-8 bg-gray-900 relative">
             
-            <div class="relative w-[400px] h-[400px]">
+            <div class="relative w-[500px] h-[450px]">
                 
-                <div class="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center bg-gray-800/80 border border-cyan-500 p-4 rounded-2xl w-40 shadow-xl">
-                    <span class="text-xs font-bold text-cyan-400 tracking-wider mb-1">SITE A</span>
-                    <div id="sub-timer-a" class="text-3xl font-mono font-bold text-white">00:00</div>
-                    <span class="text-[10px] text-gray-500 mt-1">待機中</span>
+                <div id="card-a" class="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center bg-gray-800 border-2 border-gray-700 p-4 rounded-2xl w-44 shadow-xl transition-all duration-500">
+                    <span class="text-xs font-bold text-gray-400 tracking-wider mb-1">SITE A</span>
+                    <div class="text-3xl font-mono font-bold text-white">00:00</div>
+                    
+                    <div class="mt-3 pt-2 border-t border-gray-700 flex flex-wrap gap-1 justify-center pointer-events-auto">
+                        <button onclick="toggleColor('a', 'red')" class="px-2 py-0.5 bg-red-600 text-[10px] rounded font-bold">赤</button>
+                        <button onclick="toggleColor('a', 'yellow')" class="px-2 py-0.5 bg-yellow-500 text-[10px] rounded font-bold text-black">黄</button>
+                        <button onclick="toggleColor('a', 'blue')" class="px-2 py-0.5 bg-blue-600 text-[10px] rounded font-bold">青</button>
+                        <button onclick="clearColor('a')" class="px-2 py-0.5 bg-gray-600 text-[10px] rounded font-bold w-full mt-1">なし</button>
+                    </div>
                 </div>
 
-                <div class="absolute bottom-[10%] left-0 flex flex-col items-center bg-gray-800/80 border border-emerald-500 p-4 rounded-2xl w-40 shadow-xl">
-                    <span class="text-xs font-bold text-emerald-400 tracking-wider mb-1">SITE B</span>
-                    <div id="sub-timer-b" class="text-3xl font-mono font-bold text-white">00:00</div>
-                    <span class="text-[10px] text-gray-500 mt-1">待機中</span>
+                <div id="card-b" class="absolute bottom-0 left-0 flex flex-col items-center bg-gray-800 border-2 border-gray-700 p-4 rounded-2xl w-44 shadow-xl transition-all duration-500">
+                    <span class="text-xs font-bold text-gray-400 tracking-wider mb-1">SITE B</span>
+                    <div class="text-3xl font-mono font-bold text-white">00:00</div>
+                    
+                    <div class="mt-3 pt-2 border-t border-gray-700 flex flex-wrap gap-1 justify-center">
+                        <button onclick="toggleColor('b', 'red')" class="px-2 py-0.5 bg-red-600 text-[10px] rounded font-bold">赤</button>
+                        <button onclick="toggleColor('b', 'yellow')" class="px-2 py-0.5 bg-yellow-500 text-[10px] rounded font-bold text-black">黄</button>
+                        <button onclick="toggleColor('b', 'blue')" class="px-2 py-0.5 bg-blue-600 text-[10px] rounded font-bold">青</button>
+                        <button onclick="clearColor('b')" class="px-2 py-0.5 bg-gray-600 text-[10px] rounded font-bold w-full mt-1">なし</button>
+                    </div>
                 </div>
 
-                <div class="absolute bottom-[10%] right-0 flex flex-col items-center bg-gray-800/80 border border-amber-500 p-4 rounded-2xl w-40 shadow-xl">
-                    <span class="text-xs font-bold text-amber-400 tracking-wider mb-1">SITE C</span>
-                    <div id="sub-timer-c" class="text-3xl font-mono font-bold text-white">00:00</div>
-                    <span class="text-[10px] text-gray-500 mt-1">待機中</span>
+                <div id="card-c" class="absolute bottom-0 right-0 flex flex-col items-center bg-gray-800 border-2 border-gray-700 p-4 rounded-2xl w-44 shadow-xl transition-all duration-500">
+                    <span class="text-xs font-bold text-gray-400 tracking-wider mb-1">SITE C</span>
+                    <div class="text-3xl font-mono font-bold text-white">00:00</div>
+                    
+                    <div class="mt-3 pt-2 border-t border-gray-700 flex flex-wrap gap-1 justify-center">
+                        <button onclick="toggleColor('c', 'red')" class="px-2 py-0.5 bg-red-600 text-[10px] rounded font-bold">赤</button>
+                        <button onclick="toggleColor('c', 'yellow')" class="px-2 py-0.5 bg-yellow-500 text-[10px] rounded font-bold text-black">黄</button>
+                        <button onclick="toggleColor('c', 'blue')" class="px-2 py-0.5 bg-blue-600 text-[10px] rounded font-bold">青</button>
+                        <button onclick="clearColor('c')" class="px-2 py-0.5 bg-gray-600 text-[10px] rounded font-bold w-full mt-1">なし</button>
+                    </div>
                 </div>
 
             </div>
@@ -77,10 +110,11 @@
     </div>
 
     <script>
+        // --- 1. 左側メインタイマーの処理 ---
         let timer = null;
         let isRunning = false;
         let mode = 'countdown';
-        let baseTime = 600; 
+        let baseTime = 3; // テスト用に初期値を3秒にしています
         let currentTime = baseTime;
 
         const display = document.getElementById('timer-display');
@@ -91,6 +125,10 @@
         const inputMinutes = document.getElementById('input-minutes');
         const inputSeconds = document.getElementById('input-seconds');
         const setTimeBtn = document.getElementById('set-time-btn');
+        
+        // タイムアップ画面関連
+        const timeupScreen = document.getElementById('timeup-screen');
+        const backBtn = document.getElementById('back-btn');
 
         function updateDisplay() {
             const minutes = Math.floor(Math.abs(currentTime) / 60);
@@ -101,8 +139,15 @@
         function tick() {
             if (mode === 'countdown') {
                 currentTime--;
-                if (currentTime <= 0) { currentTime = 0; pauseTimer(); }
-            } else { currentTime++; }
+                if (currentTime <= 0) {
+                    currentTime = 0;
+                    pauseTimer();
+                    // 🚨 タイムアップ！画面を表示
+                    timeupScreen.classList.remove('hidden');
+                }
+            } else {
+                currentTime++;
+            }
             updateDisplay();
         }
 
@@ -128,7 +173,69 @@
         modeDownBtn.addEventListener('click', () => { if (mode === 'countdown') return; mode = 'countdown'; modeDownBtn.classList.add('bg-blue-600','text-white'); modeUpBtn.classList.remove('bg-blue-600','text-white'); resetBtn.click(); });
         modeUpBtn.addEventListener('click', () => { if (mode === 'countup') return; mode = 'countup'; modeUpBtn.classList.add('bg-blue-600','text-white'); modeDownBtn.classList.remove('bg-blue-600','text-white'); baseTime = 0; resetBtn.click(); });
         
+        // 「戻る」ボタンを押した時の処理
+        backBtn.addEventListener('click', () => {
+            timeupScreen.classList.add('hidden'); // タイムアップ画面を隠す
+            resetBtn.click();                     // タイマーをリセット
+        });
+
         updateDisplay();
+
+
+        // --- 2. 右側三角形タイマーの色管理処理（操作側の挙動シミュレーション） ---
+        // 各サイトが選択している色の状態を保持するオブジェクト
+        const siteStates = {
+            a: { red: false, yellow: false, blue: false },
+            b: { red: false, yellow: false, blue: false },
+            c: { red: false, yellow: false, blue: false }
+        };
+
+        // 色ボタンが押された時の切り替え
+        function toggleColor(site, color) {
+            siteStates[site][color] = !siteStates[site][color];
+            applyStyles(site);
+        }
+
+        // 「なし」が押された時の全解除
+        function clearColor(site) {
+            siteStates[site].red = false;
+            siteStates[site].yellow = false;
+            siteStates[site].blue = false;
+            applyStyles(site);
+        }
+
+        // 状態を画面（見た目）に反映する関数
+        function applyStyles(site) {
+            const card = document.getElementById(`card-${site}`);
+            const state = siteStates[site];
+            
+            // 一旦すべての色・不透明度クラスをリセット
+            card.classList.remove('color-red', 'color-yellow', 'color-blue', 'color-mixed', 'opacity-30', 'border-gray-700');
+            
+            // 選ばれている色をリストアップ
+            const activeColors = Object.keys(state).filter(color => state[color]);
+
+            if (activeColors.length === 0) {
+                // 💡 【なし（色選択ゼロ）】の場合：薄くなって消えかける演出（不透明度30%）
+                card.classList.add('opacity-30', 'border-gray-700');
+            } else {
+                // 💡 色が選ばれている場合：ハッキリ表示（不透明度100%）
+                card.classList.remove('opacity-30');
+                
+                if (activeColors.length === 1) {
+                    // 単色選択
+                    card.classList.add(`color-${activeColors[0]}`);
+                } else {
+                    // 🎨 複数選択：レインボー（混合）スタイルを適用
+                    card.classList.add('color-mixed');
+                }
+            }
+        }
+
+        // 初期状態として、最初はすべて「なし（薄い状態）」からスタートさせます
+        clearColor('a');
+        clearColor('b');
+        clearColor('c');
     </script>
 </body>
 </html>
