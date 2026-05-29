@@ -255,33 +255,22 @@
         updateDisplay();
 
         // --- 🎨 【重要】各サイトの残り時間をFirebaseから受信して画面に反映 ---
-        onValue(ref(db, 'site_a/timeLeft'), (snapshot) => {
-            const sec = snapshot.val() || 0;
-            formatCardDisplay('a', sec);
-        });
-        onValue(ref(db, 'site_b/timeLeft'), (snapshot) => {
-            const sec = snapshot.val() || 0;
-            formatCardDisplay('b', sec);
-        });
-        onValue(ref(db, 'site_c/timeLeft'), (snapshot) => {
-            const sec = snapshot.val() || 0;
-            formatCardDisplay('c', sec);
-        });
+onValue(ref(db, 'site_a/timeLeft'), (snapshot) => { updateCardDisplay('a', snapshot.val() || 0); });
+        onValue(ref(db, 'site_b/timeLeft'), (snapshot) => { updateCardDisplay('b', snapshot.val() || 0); });
+        onValue(ref(db, 'site_c/timeLeft'), (snapshot) => { updateCardDisplay('c', snapshot.val() || 0); });
 
-        function formatCardDisplay(site, totalSec) {
-            const displayEl = document.getElementById(`time-display-${site}`);
+        function updateCardDisplay(site, timeLeft) {
             const cardEl = document.getElementById(`card-${site}`);
+            const displayEl = document.getElementById(`time-display-${site}`);
             
-            const m = Math.floor(Math.abs(totalSec) / 60);
-            const s = Math.floor(Math.abs(totalSec) % 60);
-            displayEl.textContent = (totalSec < 0 ? '-' : '') + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+            const m = Math.floor(timeLeft / 60);
+            const s = timeLeft % 60;
+            displayEl.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
 
-            // タイマーが動いている間はカードの色をハイライト、0なら半透明
             cardEl.classList.remove('color-red', 'color-yellow', 'color-blue', 'opacity-20', 'border-gray-200');
-            if (totalSec === 0) {
+            if (timeLeft === 0) {
                 cardEl.classList.add('opacity-20', 'border-gray-200');
             } else {
-                cardEl.classList.remove('opacity-20');
                 if (site === 'a') cardEl.classList.add('color-red');
                 if (site === 'b') cardEl.classList.add('color-yellow');
                 if (site === 'c') cardEl.classList.add('color-blue');
