@@ -21,26 +21,8 @@
             appId: "1:186126264620:web:e865311f6e414e91492489"
         };
 
-const app = initializeApp(firebaseConfig);
+        const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
-
-        // 各サイトの設定（MY_SITE = 'site_a' など）
-        const MY_SITE = 'site_a';
-
-        let gameState = 'idle';      
-        let activeTimer = null;      
-        let countdownInterval = null;
-        let subTimeLeft = 0;         
-        let graceTimeout = null;     
-        let isWaitingForMain = false;
-        let isInitialized = false;
-
-        // 🟢【ここを書き換え！】この2行のURLをご自身のmp3ファイル名にしてください
-        const startAudio = new Audio('https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg');
-        const timeupAudio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-
-        const overlay = document.getElementById('lock-overlay');
-        const overlayText = document.getElementById('lock-text');
 
         let mainTimer = null;
         let isRunning = false;
@@ -52,9 +34,9 @@ const app = initializeApp(firebaseConfig);
         let gameState = 'idle';
         let allTimersData = {};
 
-        // 🔊 【追加】メイン画面用の効果音（URLは自由に変更可能です）
-const mainStartAudio = new Audio('https://actions.google.com/sounds/v1/alarms/air_horn.ogg'); // 開始のホーン
-        const mainTimeupAudio = new Audio('https://actions.google.com/sounds/v1/science_fiction/ambient_space_alarm.ogg'); // タイムアップアラーム
+        // 🔊 音声ファイルの準備（ご自身のmp3ファイル名に書き換えてください）
+        const mainStartAudio = new Audio('https://actions.google.com/sounds/v1/alarms/air_horn.ogg'); 
+        const mainTimeupAudio = new Audio('https://actions.google.com/sounds/v1/science_fiction/ambient_space_alarm.ogg'); 
 
         const display = document.getElementById('timer-display');
         const startPauseBtn = document.getElementById('start-pause-btn');
@@ -161,11 +143,14 @@ const mainStartAudio = new Audio('https://actions.google.com/sounds/v1/alarms/ai
             display.textContent = String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
         }
 
+        // 🛠【修正】タイマーを1秒ずつ進める処理
         function tick() {
             if (mode === 'countdown') {
                 currentTime--;
                 if (currentTime <= 0) { currentTime = 0; endGameSequence(); }
-            } else { currentTime++; }
+            } else { 
+                currentTime++; 
+            }
             updateDisplay();
         }
 
@@ -174,7 +159,6 @@ const mainStartAudio = new Audio('https://actions.google.com/sounds/v1/alarms/ai
             startPauseBtn.textContent = '開始';
             timeupScreen.classList.remove('hidden');
             
-            // 🔊 【追加】全体タイムアップ音を再生
             mainTimeupAudio.play().catch(e => console.log("Audio play blocked"));
 
             syncGameState('grace');
@@ -196,7 +180,6 @@ const mainStartAudio = new Audio('https://actions.google.com/sounds/v1/alarms/ai
                     else {
                         clearInterval(countInterval); countdownOverlay.classList.add('hidden');
                         
-                        // 🔊 【追加】3, 2, 1... GO! の開始音を再生
                         mainStartAudio.play().catch(e => console.log("Audio play blocked"));
 
                         mainTimer = setInterval(tick, 1000); isRunning = true;
@@ -216,7 +199,7 @@ const mainStartAudio = new Audio('https://actions.google.com/sounds/v1/alarms/ai
             currentTime = baseTime; updateDisplay();
         });
 
-        // --- 右側カードのリアルタイム秒数同期（シンプルな元の仕様に統一） ---
+        // --- 右側カードのリアルタイム秒数同期 ---
         onValue(ref(db, 'site_a/timeLeft'), (snapshot) => { updateCardDisplay('a', snapshot.val() || 0); });
         onValue(ref(db, 'site_b/timeLeft'), (snapshot) => { updateCardDisplay('b', snapshot.val() || 0); });
         onValue(ref(db, 'site_c/timeLeft'), (snapshot) => { updateCardDisplay('c', snapshot.val() || 0); });
@@ -241,8 +224,22 @@ const mainStartAudio = new Audio('https://actions.google.com/sounds/v1/alarms/ai
             }
         }
 
-        modeDownBtn.addEventListener('click', () => { mode = 'countdown'; settingArea.classList.remove('hidden'); resetBtn.click(); });
-        modeUpBtn.addEventListener('click', () => { mode = 'countup'; settingArea.classList.add('hidden'); baseTime = 0; resetBtn.click(); });
+        // 🛠【修正】モード切替ボタンが正常に動くように修正
+        modeDownBtn.addEventListener('click', () => { 
+            mode = 'countdown'; 
+            settingArea.classList.remove('hidden'); 
+            modeDownBtn.className = "px-6 py-2.5 rounded-lg bg-blue-600 text-white font-black text-sm shadow-sm transition";
+            modeUpBtn.className = "px-6 py-2.5 rounded-lg text-gray-500 hover:text-gray-800 font-black text-sm transition";
+            resetBtn.click(); 
+        });
+        modeUpBtn.addEventListener('click', () => { 
+            mode = 'countup'; 
+            settingArea.classList.add('hidden'); 
+            modeUpBtn.className = "px-6 py-2.5 rounded-lg bg-blue-600 text-white font-black text-sm shadow-sm transition";
+            modeDownBtn.className = "px-6 py-2.5 rounded-lg text-gray-500 hover:text-gray-800 font-black text-sm transition";
+            baseTime = 0; 
+            resetBtn.click(); 
+        });
         backBtn.addEventListener('click', () => { timeupScreen.classList.add('hidden'); resetBtn.click(); });
         updateDisplay();
     </script>
