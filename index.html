@@ -3,93 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>メインダッシュボード</title>
+    <title>メインダッシュボード (Light Mode)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 各端末から「ON」にされた時の色と、強力な発光エフェクト（ネオン風） */
-        .color-red { border-color: #ef4444; box-shadow: 0 0 30px rgba(239, 68, 68, 0.8); }
-        .color-yellow { border-color: #eab308; box-shadow: 0 0 30px rgba(234, 179, 8, 0.8); }
-        .color-blue { border-color: #3b82f6; box-shadow: 0 0 30px rgba(59, 130, 246, 0.8); }
+        /* 白背景に映える、鮮やかなネオン風発光エフェクト */
+        .color-red { background-color: #fef2f2; border-color: #ef4444; color: #dc2626; box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3); }
+        .color-yellow { background-color: #fefce8; border-color: #eab308; color: #ca8a04; box-shadow: 0 10px 30px rgba(234, 179, 8, 0.3); }
+        .color-blue { background-color: #eff6ff; border-color: #3b82f6; color: #2563eb; box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3); }
         
-        /* 複数選択（同時押し）された時は、より派手な混合グラデーション枠に */
+        /* 複数選択（同時押し）された時のグラデーション枠 */
         .color-mixed { 
             border-color: transparent; 
-            background-image: linear-gradient(#1f2937, #1f2937), linear-gradient(135deg, #ef4444, #eab308, #3b82f6); 
+            background-image: linear-gradient(#ffffff, #ffffff), linear-gradient(135deg, #ef4444, #eab308, #3b82f6); 
             background-origin: border-box; 
             background-clip: padding-box, border-box; 
-            box-shadow: 0 0 40px rgba(255, 255, 255, 0.4); 
+            color: #1f2937;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15); 
         }
     </style>
 </head>
-<body class="bg-gray-900 text-white font-sans min-height-screen m-0 p-0 overflow-hidden relative">
+<body class="bg-gray-50 text-gray-800 font-sans min-height-screen m-0 p-0 overflow-hidden relative">
 
-    <div id="timeup-screen" class="hidden fixed inset-0 bg-red-700 flex flex-col justify-center items-center z-50 animate-pulse">
-        <h1 class="text-9xl font-black tracking-widest text-white drop-shadow-[0_5px_5px_rgba(0,0,0,0.5)]">TIME UP！</h1>
-        <button id="back-btn" class="absolute bottom-6 right-6 px-6 py-3 bg-gray-900/80 hover:bg-gray-900 text-sm font-bold rounded-lg border border-white/20 transition transform active:scale-95">
+    <div id="timeup-screen" class="hidden fixed inset-0 bg-red-600 flex flex-col justify-center items-center z-50 animate-pulse">
+        <h1 class="text-[12rem] font-black tracking-widest text-white drop-shadow-[0_10px_10px_rgba(0,0,0,0.3)]">TIME UP！</h1>
+        <button id="back-btn" class="absolute bottom-10 right-10 px-8 py-4 bg-white hover:bg-gray-100 text-gray-900 text-lg font-black rounded-xl shadow-2xl transition transform active:scale-95">
             戻る
         </button>
     </div>
 
     <div id="main-content" class="flex h-screen w-screen">
         
-        <div class="w-1/3 flex flex-col justify-center items-center border-r border-gray-700 p-6 bg-gray-800 z-10">
-            <div class="mb-6 bg-gray-700 p-1 rounded-lg flex space-x-2">
-                <button id="mode-down-btn" class="px-4 py-2 rounded-md bg-blue-600 text-white font-bold text-sm transition">カウントダウン</button>
-                <button id="mode-up-btn" class="px-4 py-2 rounded-md text-gray-400 hover:text-white font-bold text-sm transition">カウントアップ</button>
+        <div class="w-1/3 flex flex-col justify-center items-center border-r border-gray-200 p-6 bg-white z-10 shadow-lg">
+            
+            <div class="mb-10 bg-gray-100 p-1.5 rounded-xl flex space-x-2 border border-gray-200">
+                <button id="mode-down-btn" class="px-6 py-2.5 rounded-lg bg-blue-600 text-white font-black text-sm shadow-sm transition">カウントダウン</button>
+                <button id="mode-up-btn" class="px-6 py-2.5 rounded-lg text-gray-500 hover:text-gray-800 font-black text-sm transition">カウントアップ</button>
             </div>
-            <div id="timer-display" class="text-8xl font-mono font-bold tracking-wider text-yellow-400 mb-4 select-none">00:10</div>
-            <div class="flex items-center space-x-2 mb-10 text-base bg-gray-700 p-3 rounded-xl shadow-inner">
-                <input id="input-minutes" type="number" min="0" max="999" value="0" class="w-14 bg-gray-800 text-center font-bold text-yellow-400 rounded p-1 focus:outline-none">
-                <span class="text-gray-400 font-bold text-sm">分</span>
-                <input id="input-seconds" type="number" min="0" max="59" value="10" class="w-14 bg-gray-800 text-center font-bold text-yellow-400 rounded p-1 focus:outline-none">
-                <span class="text-gray-400 font-bold text-sm">秒</span>
-                <button id="set-time-btn" class="ml-2 px-3 py-1 bg-gray-600 hover:bg-gray-500 text-xs font-bold rounded transition">設定</button>
+            
+            <div id="timer-display" class="text-[10rem] font-mono font-black tracking-tighter text-gray-900 mb-6 select-none leading-none">00:10</div>
+            
+            <div id="setting-area" class="flex items-center space-x-3 mb-12 text-lg bg-gray-50 p-4 rounded-2xl border border-gray-200 shadow-inner transition-all duration-300">
+                <input id="input-minutes" type="number" min="0" max="999" value="0" class="w-20 bg-white border border-gray-300 text-center font-black text-gray-800 text-2xl rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <span class="text-gray-500 font-black">分</span>
+                <input id="input-seconds" type="number" min="0" max="59" value="10" class="w-20 bg-white border border-gray-300 text-center font-black text-gray-800 text-2xl rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <span class="text-gray-500 font-black">秒</span>
+                <button id="set-time-btn" class="ml-3 px-5 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm font-black rounded-xl shadow transition">設定</button>
             </div>
-            <div class="flex space-x-4">
-                <button id="start-pause-btn" class="w-32 py-3 bg-emerald-600 hover:bg-emerald-500 text-lg font-bold rounded-xl shadow-lg transition">開始</button>
-                <button id="reset-btn" class="w-32 py-3 bg-rose-600 hover:bg-rose-500 text-lg font-bold rounded-xl shadow-lg transition">リセット</button>
+
+            <div class="flex space-x-6">
+                <button id="start-pause-btn" class="w-40 py-4 bg-emerald-500 hover:bg-emerald-600 text-white text-xl font-black rounded-2xl shadow-md transition transform active:scale-95">開始</button>
+                <button id="reset-btn" class="w-40 py-4 bg-rose-500 hover:bg-rose-600 text-white text-xl font-black rounded-2xl shadow-md transition transform active:scale-95">リセット</button>
             </div>
         </div>
 
-        <div class="w-2/3 flex justify-center items-center p-8 bg-gray-900 relative">
+        <div class="w-2/3 flex justify-center items-center p-8 bg-gray-50 relative">
             
-            <div class="relative w-[650px] h-[550px]">
+            <div class="relative w-[750px] h-[600px]">
                 
-                <div id="card-a" class="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center bg-gray-800 border-4 border-gray-700 p-6 rounded-3xl w-60 shadow-2xl transition-all duration-500">
+                <div id="card-a" class="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center bg-white border-4 border-gray-200 p-8 rounded-[2.5rem] w-80 shadow-xl transition-all duration-500">
                     <span class="text-sm font-black text-gray-400 tracking-widest mb-2">SITE A</span>
-                    <div class="text-5xl font-mono font-black text-white tracking-wider">00:00</div>
+                    <div class="text-7xl font-mono font-black tracking-wide">00:00</div>
                     
-                    <div class="mt-4 pt-3 border-t border-gray-700 w-full text-center">
-                        <p class="text-[10px] text-gray-500 mb-1.5 font-bold">【他端末からの色信号】</p>
-                        <div class="flex justify-center gap-1">
-                            <button onclick="toggleColor('a', 'red')" class="px-2 py-1 bg-red-600 text-[10px] rounded font-bold">赤 ON/OFF</button>
-                            <button onclick="clearColor('a')" class="px-2 py-1 bg-gray-600 text-[10px] rounded font-bold">なし</button>
+                    <div class="mt-6 pt-4 border-t border-gray-200 w-full text-center">
+                        <p class="text-[11px] text-gray-400 mb-2 font-bold">【他端末からの色信号】</p>
+                        <div class="flex justify-center gap-2">
+                            <button onclick="toggleColor('a', 'red')" class="px-3 py-1.5 bg-red-500 text-white text-xs rounded-lg font-black shadow-sm">赤 ON/OFF</button>
+                            <button onclick="clearColor('a')" class="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs rounded-lg font-black">なし</button>
                         </div>
                     </div>
                 </div>
 
-                <div id="card-b" class="absolute bottom-0 left-0 flex flex-col items-center bg-gray-800 border-4 border-gray-700 p-6 rounded-3xl w-60 shadow-2xl transition-all duration-500">
+                <div id="card-b" class="absolute bottom-0 left-0 flex flex-col items-center bg-white border-4 border-gray-200 p-8 rounded-[2.5rem] w-80 shadow-xl transition-all duration-500">
                     <span class="text-sm font-black text-gray-400 tracking-widest mb-2">SITE B</span>
-                    <div class="text-5xl font-mono font-black text-white tracking-wider">00:00</div>
+                    <div class="text-7xl font-mono font-black tracking-wide">00:00</div>
                     
-                    <div class="mt-4 pt-3 border-t border-gray-700 w-full text-center">
-                        <p class="text-[10px] text-gray-500 mb-1.5 font-bold">【他端末からの色信号】</p>
-                        <div class="flex justify-center gap-1">
-                            <button onclick="toggleColor('b', 'yellow')" class="px-2 py-1 bg-yellow-500 text-[10px] rounded font-bold text-black">黄 ON/OFF</button>
-                            <button onclick="clearColor('b')" class="px-2 py-1 bg-gray-600 text-[10px] rounded font-bold">なし</button>
+                    <div class="mt-6 pt-4 border-t border-gray-200 w-full text-center">
+                        <p class="text-[11px] text-gray-400 mb-2 font-bold">【他端末からの色信号】</p>
+                        <div class="flex justify-center gap-2">
+                            <button onclick="toggleColor('b', 'yellow')" class="px-3 py-1.5 bg-yellow-500 text-white text-xs rounded-lg font-black shadow-sm">黄 ON/OFF</button>
+                            <button onclick="clearColor('b')" class="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs rounded-lg font-black">なし</button>
                         </div>
                     </div>
                 </div>
 
-                <div id="card-c" class="absolute bottom-0 right-0 flex flex-col items-center bg-gray-800 border-4 border-gray-700 p-6 rounded-3xl w-60 shadow-2xl transition-all duration-500">
+                <div id="card-c" class="absolute bottom-0 right-0 flex flex-col items-center bg-white border-4 border-gray-200 p-8 rounded-[2.5rem] w-80 shadow-xl transition-all duration-500">
                     <span class="text-sm font-black text-gray-400 tracking-widest mb-2">SITE C</span>
-                    <div class="text-5xl font-mono font-black text-white tracking-wider">00:00</div>
+                    <div class="text-7xl font-mono font-black tracking-wide">00:00</div>
                     
-                    <div class="mt-4 pt-3 border-t border-gray-700 w-full text-center">
-                        <p class="text-[10px] text-gray-500 mb-1.5 font-bold">【他端末からの色信号】</p>
-                        <div class="flex justify-center gap-1">
-                            <button onclick="toggleColor('c', 'blue')" class="px-2 py-1 bg-blue-600 text-[10px] rounded font-bold">青 ON/OFF</button>
-                            <button onclick="clearColor('c')" class="px-2 py-1 bg-gray-600 text-[10px] rounded font-bold">なし</button>
+                    <div class="mt-6 pt-4 border-t border-gray-200 w-full text-center">
+                        <p class="text-[11px] text-gray-400 mb-2 font-bold">【他端末からの色信号】</p>
+                        <div class="flex justify-center gap-2">
+                            <button onclick="toggleColor('c', 'blue')" class="px-3 py-1.5 bg-blue-500 text-white text-xs rounded-lg font-black shadow-sm">青 ON/OFF</button>
+                            <button onclick="clearColor('c')" class="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs rounded-lg font-black">なし</button>
                         </div>
                     </div>
                 </div>
@@ -111,6 +116,7 @@
         const inputMinutes = document.getElementById('input-minutes');
         const inputSeconds = document.getElementById('input-seconds');
         const setTimeBtn = document.getElementById('set-time-btn');
+        const settingArea = document.getElementById('setting-area'); // 設定エリアのコンテナ
         const timeupScreen = document.getElementById('timeup-screen');
         const backBtn = document.getElementById('back-btn');
 
@@ -122,16 +128,46 @@
             if (mode === 'countdown') { currentTime--; if (currentTime <= 0) { currentTime = 0; pauseTimer(); timeupScreen.classList.remove('hidden'); } } 
             else { currentTime++; } updateDisplay();
         }
-        function pauseTimer() { clearInterval(timer); isRunning = false; startPauseBtn.textContent = '開始'; startPauseBtn.className = startPauseBtn.className.replace('bg-amber-600', 'bg-emerald-600'); }
-        startPauseBtn.addEventListener('click', () => { if (isRunning) { pauseTimer(); } else { timer = setInterval(tick, 1000); startPauseBtn.textContent = '一時停止'; startPauseBtn.className = startPauseBtn.className.replace('bg-emerald-600', 'bg-amber-600'); isRunning = true; } });
+        function pauseTimer() { clearInterval(timer); isRunning = false; startPauseBtn.textContent = '開始'; startPauseBtn.className = startPauseBtn.className.replace('bg-amber-500', 'bg-emerald-500'); }
+        
+        startPauseBtn.addEventListener('click', () => { 
+            if (isRunning) { pauseTimer(); } 
+            else { 
+                timer = setInterval(tick, 1000); 
+                startPauseBtn.textContent = '一時停止'; 
+                startPauseBtn.className = startPauseBtn.className.replace('bg-emerald-500', 'bg-amber-500'); // オレンジ色に
+                isRunning = true; 
+            } 
+        });
+        
         resetBtn.addEventListener('click', () => { pauseTimer(); currentTime = baseTime; updateDisplay(); });
         setTimeBtn.addEventListener('click', () => { pauseTimer(); baseTime = (parseInt(inputMinutes.value)||0)*60 + (parseInt(inputSeconds.value)||0); currentTime = baseTime; updateDisplay(); });
-        modeDownBtn.addEventListener('click', () => { if (mode === 'countdown') return; mode = 'countdown'; modeDownBtn.classList.add('bg-blue-600','text-white'); modeUpBtn.classList.remove('bg-blue-600','text-white'); resetBtn.click(); });
-        modeUpBtn.addEventListener('click', () => { if (mode === 'countup') return; mode = 'countup'; modeUpBtn.classList.add('bg-blue-600','text-white'); modeDownBtn.classList.remove('bg-blue-600','text-white'); baseTime = 0; resetBtn.click(); });
+        
+        // カウントダウン選択時：設定エリアを表示する
+        modeDownBtn.addEventListener('click', () => { 
+            if (mode === 'countdown') return; 
+            mode = 'countdown'; 
+            modeDownBtn.classList.add('bg-blue-600','text-white'); modeDownBtn.classList.remove('text-gray-500');
+            modeUpBtn.classList.remove('bg-blue-600','text-white'); modeUpBtn.classList.add('text-gray-500');
+            settingArea.classList.remove('hidden'); // ✨ 表示
+            resetBtn.click(); 
+        });
+        
+        // カウントアップ選択時：設定エリアを消す
+        modeUpBtn.addEventListener('click', () => { 
+            if (mode === 'countup') return; 
+            mode = 'countup'; 
+            modeUpBtn.classList.add('bg-blue-600','text-white'); modeUpBtn.classList.remove('text-gray-500');
+            modeDownBtn.classList.remove('bg-blue-600','text-white'); modeDownBtn.classList.add('text-gray-500');
+            settingArea.classList.add('hidden'); // ✨ 非表示（消える）
+            baseTime = 0; 
+            resetBtn.click(); 
+        });
+        
         backBtn.addEventListener('click', () => { timeupScreen.classList.add('hidden'); resetBtn.click(); });
         updateDisplay();
 
-        // --- 🎨 色変化の制御（他端末からの受信シミュレーション） ---
+        // --- 🎨 色変化の制御 ---
         const siteStates = {
             a: { red: false, yellow: false, blue: false },
             b: { red: false, yellow: false, blue: false },
@@ -151,21 +187,24 @@
         function applyStyles(site) {
             const card = document.getElementById(`card-${site}`);
             const state = siteStates[site];
-            card.classList.remove('color-red', 'color-yellow', 'color-blue', 'color-mixed', 'opacity-30', 'border-gray-700');
+            card.classList.remove('color-red', 'color-yellow', 'color-blue', 'color-mixed', 'opacity-20', 'border-gray-200', 'text-gray-900');
             
             const activeColors = Object.keys(state).filter(color => state[color]);
 
             if (activeColors.length === 0) {
-                // 「なし」の時は薄く消えかける（不透明度30%）
-                card.classList.add('opacity-30', 'border-gray-700');
+                // 「なし」の時はさらに薄く（不透明度20%）、文字色も薄いグレーに
+                card.classList.add('opacity-20', 'border-gray-200', 'text-gray-300');
             } else {
-                card.classList.remove('opacity-30');
-                if (activeColors.length === 1) { card.classList.add(`color-${activeColors[0]}`); } 
-                else { card.classList.add('color-mixed'); }
+                card.classList.remove('opacity-20');
+                if (activeColors.length === 1) { 
+                    card.classList.add(`color-${activeColors[0]}`); 
+                } else { 
+                    card.classList.add('color-mixed'); 
+                }
             }
         }
 
-        // 初期化：すべて最初は「なし（薄い状態）」
+        // 初期化：すべて最初は「なし」
         clearColor('a'); clearColor('b'); clearColor('c');
     </script>
 </body>
