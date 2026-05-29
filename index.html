@@ -21,10 +21,27 @@
             appId: "1:186126264620:web:e865311f6e414e91492489"
         };
 
-        const app = initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        // --- 全局状態 ---
+        // 各サイトの設定（MY_SITE = 'site_a' など）
+        const MY_SITE = 'site_a';
+
+        let gameState = 'idle';      
+        let activeTimer = null;      
+        let countdownInterval = null;
+        let subTimeLeft = 0;         
+        let graceTimeout = null;     
+        let isWaitingForMain = false;
+        let isInitialized = false;
+
+        // 🟢【ここを書き換え！】この2行のURLをご自身のmp3ファイル名にしてください
+        const startAudio = new Audio('https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg');
+        const timeupAudio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+
+        const overlay = document.getElementById('lock-overlay');
+        const overlayText = document.getElementById('lock-text');
+
         let mainTimer = null;
         let isRunning = false;
         let mode = 'countdown';
@@ -34,14 +51,11 @@
         let isScoreReset = true;
         let gameState = 'idle';
         let allTimersData = {};
-        let baseTime = 10;
-        let currentTime = baseTime;
-        let currentScore = 0;
-        let isScoreReset = true;
-        let gameState = 'idle';
-        let allTimersData = {};
 
-        // --- DOM要素 ---
+        // 🔊 【追加】メイン画面用の効果音（URLは自由に変更可能です）
+const mainStartAudio = new Audio('https://actions.google.com/sounds/v1/alarms/air_horn.ogg'); // 開始のホーン
+        const mainTimeupAudio = new Audio('https://actions.google.com/sounds/v1/science_fiction/ambient_space_alarm.ogg'); // タイムアップアラーム
+
         const display = document.getElementById('timer-display');
         const startPauseBtn = document.getElementById('start-pause-btn');
         const resetBtn = document.getElementById('reset-btn');
@@ -51,8 +65,6 @@
         const settingArea = document.getElementById('setting-area');
         const timeupScreen = document.getElementById('timeup-screen');
         const backBtn = document.getElementById('back-btn');
-        const mainStartAudio = new Audio('https://actions.google.com/sounds/v1/alarms/air_horn.ogg'); // カウントダウン終了時の音
-        const mainTimeupAudio = new Audio('https://actions.google.com/sounds/v1/science_fiction/ambient_space_alarm.ogg'); // 全体タイムアップの音
         
         const menuBtn = document.getElementById('menu-btn');
         const menuModal = document.getElementById('menu-modal');
@@ -74,7 +86,7 @@
         const filterSiteSelect = document.getElementById('filter-site'); 
         const timerListContainer = document.getElementById('timer-list-container');
 
-        // --- ⚙️ プルダウン生成 ---
+        // プルダウン生成
         for (let i = 0; i <= 60; i++) {
             const opt = document.createElement('option'); opt.value = i; opt.textContent = String(i).padStart(2, '0');
             inputMinutes.appendChild(opt);
@@ -94,7 +106,6 @@
             selectSeconds.appendChild(opt);
         }
 
-        // --- 📡 Firebase同期 (メイン状態・スコア) ---
         function syncGameState(state) {
             gameState = state;
             set(ref(db, 'game/state'), state);
@@ -103,32 +114,24 @@
         onValue(ref(db, 'game/score'), (snapshot) => {
             currentScore = snapshot.val() || 0;
             scoreDisplay.textContent = currentScore;
-            if (currentScore === 0) {
-                isScoreReset = true;
-                startPauseBtn.disabled = false;
-            } else {
-                isScoreReset = false;
-            }
+            isScoreReset = (currentScore === 0);
         });
 
         scoreResetBtn.addEventListener('click', () => {
             set(ref(db, 'game/score'), 0);
-            set(ref(db, 'site_a/timeLeft'), 0);
-            set(ref(db, 'site_b/timeLeft'), 0);
-            set(ref(db, 'site_c/timeLeft'), 0);
+            set(ref(db, 'site_a/active'), null); set(ref(db, 'site_a/timeLeft'), 0);
+            set(ref(db, 'site_b/active'), null); set(ref(db, 'site_b/timeLeft'), 0);
+            set(ref(db, 'site_c/active'), null); set(ref(db, 'site_c/timeLeft'), 0);
         });
 
-        // --- 📋 管理者メニュー機能 ---
         addTimerBtn.addEventListener('click', () => {
             const site = targetSiteSelect.value;
             const name = timerNameInput.value.trim();
             const points = parseInt(timerPointsInput.value) || 0;
             const sec = (parseInt(selectMinutes.value)||0)*60 + (parseInt(selectSeconds.value)||0);
             if(!name) return alert("名称を入力してください");
-            const newTimerRef = push(ref(db, `timers/${site}`));
-            set(newTimerRef, { name, points, duration: sec });
-            timerNameInput.value = "";
-            timerPointsInput.value = "10";
+            push(ref(db, `timers/${site}`), { name, points, duration: sec });
+            timerNameInput.value = ""; timerPointsInput.value = "10";
         });
 
         function renderTimerList() {
@@ -137,132 +140,84 @@
             if (allTimersData[selectedSite]) {
                 Object.keys(allTimersData[selectedSite]).forEach(key => {
                     const item = allTimersData[selectedSite][key];
-                    const m = Math.floor(item.duration / 60);
-                    const s = item.duration % 60;
+                    const m = Math.floor(item.duration / 60); const s = item.duration % 60;
                     const div = document.createElement('div');
-                    div.className = "flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-200 text-sm font-bold shadow-sm";
-                    div.innerHTML = `
-                        <div class="flex flex-col">
-                            <span class="text-gray-800">${item.name}</span>
-                            <span class="text-xs text-gray-400">${m}分${s}秒 / ${item.points}pt</span>
-                        </div>
-                        <button class="text-rose-500 hover:text-rose-700 font-black px-2 py-1 bg-rose-50 hover:bg-rose-100 rounded-lg text-xs transition">削除</button>
-                    `;
-                    div.querySelector('button').addEventListener('click', () => {
-                        remove(ref(db, `timers/${selectedSite}/${key}`));
-                    });
+                    div.className = "flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border text-sm font-bold shadow-sm";
+                    div.innerHTML = `<div>${item.name} (${m}:${s})</div><button class="text-rose-500 px-2 font-black">削除</button>`;
+                    div.querySelector('button').addEventListener('click', () => { remove(ref(db, `timers/${selectedSite}/${key}`)); });
                     timerListContainer.appendChild(div);
                 });
-            } else {
-                timerListContainer.innerHTML = `<p class="text-center text-xs text-gray-400 py-4 font-bold">登録されているタイマーはありません</p>`;
             }
         }
 
-        onValue(ref(db, 'timers'), (snapshot) => {
-            allTimersData = snapshot.val() || {};
-            renderTimerList();
-        });
-
+        onValue(ref(db, 'timers'), (snapshot) => { allTimersData = snapshot.val() || {}; renderTimerList(); });
         filterSiteSelect.addEventListener('change', renderTimerList);
         menuBtn.addEventListener('click', () => menuModal.classList.remove('hidden'));
         closeMenuBtn.addEventListener('click', () => menuModal.classList.add('hidden'));
 
-        // --- ⏱️ タイマー制御ロジック ---
         function updateDisplay() {
             const minutes = Math.floor(Math.abs(currentTime) / 60);
             const seconds = Math.floor(Math.abs(currentTime) % 60);
-            display.textContent = (currentTime < 0 ? '-' : '') + String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+            display.textContent = String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
         }
 
         function tick() {
             if (mode === 'countdown') {
                 currentTime--;
-                if (currentTime <= 0) {
-                    currentTime = 0;
-                    endGameSequence();
-                }
-            } else {
-                currentTime++;
-            }
+                if (currentTime <= 0) { currentTime = 0; endGameSequence(); }
+            } else { currentTime++; }
             updateDisplay();
         }
 
-function endGameSequence() {
+        function endGameSequence() {
             clearInterval(mainTimer); isRunning = false;
             startPauseBtn.textContent = '開始';
             timeupScreen.classList.remove('hidden');
             
-            // 🔊 全体タイムアップ音を再生
-            mainTimeupAudio.play().catch(e => console.log("Audio play blocked:", e));
+            // 🔊 【追加】全体タイムアップ音を再生
+            mainTimeupAudio.play().catch(e => console.log("Audio play blocked"));
 
             syncGameState('grace');
             setTimeout(() => { syncGameState('idle'); }, 10000); 
         }
 
         startPauseBtn.addEventListener('click', () => {
-            if (!isScoreReset) {
-                alert("スコアリセットを行わないと開始できません！");
-                return;
-            }
+            if (!isScoreReset) return alert("スコアリセットを行わないと開始できません！");
             if (isRunning) {
-                clearInterval(mainTimer);
-                isRunning = false;
-                startPauseBtn.textContent = '開始';
-                startPauseBtn.className = startPauseBtn.className.replace('bg-amber-500', 'bg-emerald-500');
-                syncGameState('idle');
+                clearInterval(mainTimer); isRunning = false;
+                startPauseBtn.textContent = '開始'; syncGameState('idle');
             } else {
                 countdownOverlay.classList.remove('hidden');
-                let count = 3;
-                countdownNumber.textContent = count;
+                let count = 3; countdownNumber.textContent = count;
                 syncGameState('counting');
-const countInterval = setInterval(() => {
+                const countInterval = setInterval(() => {
                     count--;
                     if (count > 0) { countdownNumber.textContent = count; } 
                     else {
                         clearInterval(countInterval); countdownOverlay.classList.add('hidden');
                         
-                        // 🔊 3, 2, 1... GO! の開始音を再生
-                        mainStartAudio.play().catch(e => console.log("Audio play blocked:", e));
+                        // 🔊 【追加】3, 2, 1... GO! の開始音を再生
+                        mainStartAudio.play().catch(e => console.log("Audio play blocked"));
 
                         mainTimer = setInterval(tick, 1000); isRunning = true;
                         startPauseBtn.textContent = '一時停止'; syncGameState('active');
                     }
                 }, 1000);
+            }
         });
 
         resetBtn.addEventListener('click', () => {
-            clearInterval(mainTimer);
-            isRunning = false;
-            currentTime = baseTime;
-            startPauseBtn.textContent = '開始';
-            startPauseBtn.className = startPauseBtn.className.replace('bg-amber-500', 'bg-emerald-500');
-            updateDisplay();
-            syncGameState('idle');
+            clearInterval(mainTimer); isRunning = false; currentTime = baseTime;
+            startPauseBtn.textContent = '開始'; updateDisplay(); syncGameState('idle');
         });
 
         setTimeBtn.addEventListener('click', () => {
             baseTime = (parseInt(inputMinutes.value)||0)*60 + (parseInt(inputSeconds.value)||0);
-            currentTime = baseTime;
-            updateDisplay();
+            currentTime = baseTime; updateDisplay();
         });
 
-        modeDownBtn.addEventListener('click', () => {
-            if (mode === 'countdown') return;
-            mode = 'countdown';
-            modeDownBtn.classList.add('bg-blue-600','text-white'); modeUpBtn.classList.add('text-gray-500');
-            settingArea.classList.remove('hidden'); resetBtn.click();
-        });
-        modeUpBtn.addEventListener('click', () => {
-            if (mode === 'countup') return;
-            mode = 'countup';
-            modeUpBtn.classList.add('bg-blue-600','text-white'); modeDownBtn.classList.add('text-gray-500');
-            settingArea.classList.add('hidden'); baseTime = 0; resetBtn.click();
-        });
-        backBtn.addEventListener('click', () => { timeupScreen.classList.add('hidden'); resetBtn.click(); });
-        updateDisplay();
-
-        // --- 🎨 【重要】各サイトの残り時間をFirebaseから受信して画面に反映 ---
-onValue(ref(db, 'site_a/timeLeft'), (snapshot) => { updateCardDisplay('a', snapshot.val() || 0); });
+        // --- 右側カードのリアルタイム秒数同期（シンプルな元の仕様に統一） ---
+        onValue(ref(db, 'site_a/timeLeft'), (snapshot) => { updateCardDisplay('a', snapshot.val() || 0); });
         onValue(ref(db, 'site_b/timeLeft'), (snapshot) => { updateCardDisplay('b', snapshot.val() || 0); });
         onValue(ref(db, 'site_c/timeLeft'), (snapshot) => { updateCardDisplay('c', snapshot.val() || 0); });
 
@@ -277,12 +232,19 @@ onValue(ref(db, 'site_a/timeLeft'), (snapshot) => { updateCardDisplay('a', snaps
             cardEl.classList.remove('color-red', 'color-yellow', 'color-blue', 'opacity-20', 'border-gray-200');
             if (timeLeft === 0) {
                 cardEl.classList.add('opacity-20', 'border-gray-200');
+                displayEl.className = "text-7xl font-mono font-black tracking-wide text-gray-400";
             } else {
                 if (site === 'a') cardEl.classList.add('color-red');
                 if (site === 'b') cardEl.classList.add('color-yellow');
                 if (site === 'c') cardEl.classList.add('color-blue');
+                displayEl.className = "text-7xl font-mono font-black tracking-wide text-gray-900";
             }
         }
+
+        modeDownBtn.addEventListener('click', () => { mode = 'countdown'; settingArea.classList.remove('hidden'); resetBtn.click(); });
+        modeUpBtn.addEventListener('click', () => { mode = 'countup'; settingArea.classList.add('hidden'); baseTime = 0; resetBtn.click(); });
+        backBtn.addEventListener('click', () => { timeupScreen.classList.add('hidden'); resetBtn.click(); });
+        updateDisplay();
     </script>
 
     <style>
@@ -399,15 +361,15 @@ onValue(ref(db, 'site_a/timeLeft'), (snapshot) => { updateCardDisplay('a', snaps
             <div class="relative w-[900px] h-[650px]">
                 <div id="card-a" class="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center bg-white border-4 border-gray-200 p-8 rounded-[2.5rem] w-80 shadow-xl transition-all duration-500 opacity-20">
                     <span class="text-sm font-black text-gray-400 tracking-widest mb-2">SITE A</span>
-                    <div id="time-display-a" class="text-7xl font-mono font-black tracking-wide">00:00</div>
+                    <div id="time-display-a" class="text-7xl font-mono font-black tracking-wide text-gray-400">00:00</div>
                 </div>
                 <div id="card-b" class="absolute bottom-0 -left-16 flex flex-col items-center bg-white border-4 border-gray-200 p-8 rounded-[2.5rem] w-80 shadow-xl transition-all duration-500 opacity-20">
                     <span class="text-sm font-black text-gray-400 tracking-widest mb-2">SITE B</span>
-                    <div id="time-display-b" class="text-7xl font-mono font-black tracking-wide">00:00</div>
+                    <div id="time-display-b" class="text-7xl font-mono font-black tracking-wide text-gray-400">00:00</div>
                 </div>
                 <div id="card-c" class="absolute bottom-0 -right-16 flex flex-col items-center bg-white border-4 border-gray-200 p-8 rounded-[2.5rem] w-80 shadow-xl transition-all duration-500 opacity-20">
                     <span class="text-sm font-black text-gray-400 tracking-widest mb-2">SITE C</span>
-                    <div id="time-display-c" class="text-7xl font-mono font-black tracking-wide">00:00</div>
+                    <div id="time-display-c" class="text-7xl font-mono font-black tracking-wide text-gray-400">00:00</div>
                 </div>
             </div>
         </div>
