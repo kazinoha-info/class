@@ -55,6 +55,10 @@
         const countdownOverlay = document.getElementById('countdown-overlay');
         const countdownNumber = document.getElementById('countdown-number');
 
+        // 左側メインタイマー設定用（プルダウン）
+        const inputMinutes = document.getElementById('input-minutes');
+        const inputSeconds = document.getElementById('input-seconds');
+
         // 管理者設定関連
         const targetSiteSelect = document.getElementById('target-site');
         const timerNameInput = document.getElementById('timer-name');
@@ -65,7 +69,19 @@
         const filterSiteSelect = document.getElementById('filter-site'); // 絞り込み用プルダウン
         const timerListContainer = document.getElementById('timer-list-container');
 
-        // --- ⚙️ プルダウン生成 ---
+        // --- ⚙️ プルダウン生成（メインタイマー用 ＆ 管理者メニュー用） ---
+        // メインタイマー側
+        for (let i = 0; i <= 60; i++) {
+            const opt = document.createElement('option'); opt.value = i; opt.textContent = String(i).padStart(2, '0');
+            inputMinutes.appendChild(opt);
+        }
+        for (let i = 0; i <= 59; i++) {
+            const opt = document.createElement('option'); opt.value = i; opt.textContent = String(i).padStart(2, '0');
+            if (i === 10) opt.selected = true; // デフォルト10秒
+            inputSeconds.appendChild(opt);
+        }
+
+        // 管理者メニュー側
         for (let i = 0; i <= 60; i++) {
             const opt = document.createElement('option'); opt.value = i; opt.textContent = String(i).padStart(2, '0');
             selectMinutes.appendChild(opt);
@@ -101,7 +117,7 @@
             set(ref(db, 'site_c/activeTimer'), null);
         });
 
-        // --- 📋 管理者メニュー：タイマー追加・削除・【NEW】絞り込み機能 ---
+        // --- 📋 管理者メニュー：タイマー追加・削除・絞り込み機能 ---
         addTimerBtn.addEventListener('click', () => {
             const site = targetSiteSelect.value;
             const name = timerNameInput.value.trim();
@@ -155,7 +171,7 @@
         // 絞り込みプルダウンが切り替わったら再描画
         filterSiteSelect.addEventListener('change', renderTimerList);
 
-        // メニューの開閉
+        // メメニューの開閉
         menuBtn.addEventListener('click', () => menuModal.classList.remove('hidden'));
         closeMenuBtn.addEventListener('click', () => menuModal.classList.add('hidden'));
 
@@ -242,7 +258,7 @@
         });
 
         setTimeBtn.addEventListener('click', () => {
-            baseTime = (parseInt(document.getElementById('input-minutes').value)||0)*60 + (parseInt(document.getElementById('input-seconds').value)||0);
+            baseTime = (parseInt(inputMinutes.value)||0)*60 + (parseInt(inputSeconds.value)||0);
             currentTime = baseTime;
             updateDisplay();
         });
@@ -292,20 +308,24 @@
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans min-height-screen m-0 p-0 overflow-hidden relative">
 
+    <!-- 💥 3, 2, 1 カウントダウン全画面表示 -->
     <div id="countdown-overlay" class="hidden fixed inset-0 bg-gray-900/90 flex justify-center items-center z-50">
         <div id="countdown-number" class="text-white text-[15rem] font-black animate-ping">3</div>
     </div>
 
+    <!-- 🕒 TIME UP！画面 -->
     <div id="timeup-screen" class="hidden fixed inset-0 bg-red-600 flex flex-col justify-center items-center z-40 animate-pulse">
         <h1 class="text-[12rem] font-black tracking-widest text-white">TIME UP！</h1>
         <p class="text-white text-2xl font-bold mt-4">プレイヤーは10秒間だけ最後の判定操作が可能です！</p>
         <button id="back-btn" class="absolute bottom-10 right-10 px-8 py-4 bg-white text-gray-900 text-lg font-black rounded-xl shadow-2xl">戻る</button>
     </div>
 
+    <!-- 右上設定メニューボタン -->
     <div class="absolute top-6 right-6 z-30">
         <button id="menu-btn" class="px-5 py-3 bg-gray-800 hover:bg-gray-700 text-white text-sm font-black rounded-2xl shadow transition">⚙️ 設定メニュー</button>
     </div>
 
+    <!-- 🛠️ 管理者メニューモーダル -->
     <div id="menu-modal" class="hidden fixed inset-0 bg-black/50 flex justify-center items-center z-50">
         <div class="bg-white rounded-[2rem] p-8 w-[500px] shadow-2xl max-h-[85vh] flex flex-col">
             <div class="flex justify-between items-center mb-6">
@@ -313,6 +333,7 @@
                 <button id="close-menu-btn" class="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
             </div>
             
+            <!-- 追加フォーム -->
             <div class="space-y-4 border-b pb-6 mb-4">
                 <div>
                     <label class="block text-xs font-black text-gray-400 mb-1">追加先端末</label>
@@ -344,6 +365,7 @@
                 <button id="add-timer-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl shadow transition">このタイマーを追加して同期</button>
             </div>
 
+            <!-- プルダウンによる絞り込み一覧表示 -->
             <div class="flex flex-col flex-1 min-h-0">
                 <div class="flex justify-between items-center mb-2">
                     <label class="text-xs font-black text-gray-400">現在登録されている選択肢一覧</label>
@@ -354,27 +376,34 @@
                     </select>
                 </div>
                 <div id="timer-list-container" class="space-y-2 overflow-y-auto flex-1 pr-1">
-                    </div>
+                    <!-- 絞り込まれたデータが動的に追加されます -->
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- メインレイアウト -->
     <div id="main-content" class="flex h-screen w-screen">
+        <!-- ⏱️ 左側：メインタイマー ＆ 超巨大トータルスコア -->
         <div class="w-1/3 flex flex-col justify-between items-center border-r border-gray-200 py-10 px-6 bg-white z-10 shadow-lg">
             
+            <!-- 上部：モード切替 -->
             <div class="bg-gray-100 p-1.5 rounded-xl flex space-x-2 border border-gray-200">
                 <button id="mode-down-btn" class="px-6 py-2.5 rounded-lg bg-blue-600 text-white font-black text-sm shadow-sm transition">カウントダウン</button>
                 <button id="mode-up-btn" class="px-6 py-2.5 rounded-lg text-gray-500 hover:text-gray-800 font-black text-sm transition">カウントアップ</button>
             </div>
             
+            <!-- 中央：メインタイマーと時間設定 -->
             <div class="w-full flex flex-col items-center">
                 <div id="timer-display" class="text-[10rem] font-mono font-black tracking-tighter text-gray-900 select-none leading-none mb-4">00:10</div>
                 
+                <!-- 【修正】ここを完全にプルダウン形式へと戻しました -->
                 <div id="setting-area" class="flex items-center space-x-2 text-sm bg-gray-50 p-3 rounded-2xl border border-gray-200 shadow-inner mb-6">
-                    <input id="input-minutes" type="number" min="0" max="60" value="0" class="w-12 p-1 text-center font-bold border rounded-lg bg-white"><span>分</span>
-                    <input id="input-seconds" type="number" min="0" max="59" value="10" class="w-12 p-1 text-center font-bold border rounded-lg bg-white"><span>秒</span>
-                    <button id="setTimeBtn" onclick="document.getElementById('set-time-btn').click()" class="hidden"></button>
-                    <button id="set-time-btn" class="ml-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-xs font-black rounded-xl">設定</button>
+                    <select id="input-minutes" class="w-16 p-1.5 text-center font-bold border rounded-lg bg-white appearance-none"></select>
+                    <span class="font-bold text-gray-500">分</span>
+                    <select id="input-seconds" class="w-16 p-1.5 text-center font-bold border rounded-lg bg-white appearance-none"></select>
+                    <span class="font-bold text-gray-500">秒</span>
+                    <button id="set-time-btn" class="ml-2 px-4 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-xs font-black rounded-xl transition">設定</button>
                 </div>
 
                 <div class="flex space-x-4">
@@ -383,6 +412,7 @@
                 </div>
             </div>
 
+            <!-- 下部：特等席の巨大トータルスコアエリア -->
             <div class="w-full border-t pt-6 text-center">
                 <span class="text-xs font-black text-gray-400 tracking-widest block mb-1">TOTAL SCORE</span>
                 <div class="flex items-center justify-center space-x-4">
@@ -395,6 +425,7 @@
             </div>
         </div>
 
+        <!-- 右側：三角形タイマー（間隔拡大版） -->
         <div class="w-2/3 flex justify-center items-center p-8 bg-gray-50 relative">
             <div class="relative w-[900px] h-[650px]">
                 <div id="card-a" class="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center bg-white border-4 border-gray-200 p-8 rounded-[2.5rem] w-80 shadow-xl transition-all duration-500">
