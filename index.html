@@ -31,8 +31,9 @@
         let baseTime = 10;
         let currentTime = baseTime;
         let currentScore = 0;
-        let isScoreReset = true; // スコアリセットフラグ
-        let gameState = 'idle'; // idle, counting, active, grace
+        let isScoreReset = true;
+        let gameState = 'idle';
+        let allTimersData = {}; // 読み込んだタイマーデータを一時保持するオブジェクト
 
         // --- DOM要素 ---
         const display = document.getElementById('timer-display');
@@ -61,6 +62,7 @@
         const selectMinutes = document.getElementById('select-minutes');
         const selectSeconds = document.getElementById('select-seconds');
         const addTimerBtn = document.getElementById('add-timer-btn');
+        const filterSiteSelect = document.getElementById('filter-site'); // 絞り込み用プルダウン
         const timerListContainer = document.getElementById('timer-list-container');
 
         // --- ⚙️ プルダウン生成 ---
@@ -80,14 +82,13 @@
             set(ref(db, 'game/state'), state);
         }
 
-        // スコアの自動集計・リセット監視
+        // スコアの自動集計監視
         onValue(ref(db, 'game/score'), (snapshot) => {
             currentScore = snapshot.val() || 0;
             scoreDisplay.textContent = currentScore;
             if (currentScore === 0) {
                 isScoreReset = true;
                 startPauseBtn.disabled = false;
-                startPauseBtn.opacity = "1";
             } else {
                 isScoreReset = false;
             }
@@ -95,13 +96,12 @@
 
         scoreResetBtn.addEventListener('click', () => {
             set(ref(db, 'game/score'), 0);
-            // 動いている各種サイトの選択中タイマー情報も初期化
             set(ref(db, 'site_a/activeTimer'), null);
             set(ref(db, 'site_b/activeTimer'), null);
             set(ref(db, 'site_c/activeTimer'), null);
         });
 
-        // --- 📋 管理者メニュー：タイマー追加・削除ルール ---
+        // --- 📋 管理者メニュー：タイマー追加・削除・【NEW】絞り込み機能 ---
         addTimerBtn.addEventListener('click', () => {
             const site = targetSiteSelect.value;
             const name = timerNameInput.value.trim();
@@ -117,31 +117,43 @@
             timerPointsInput.value = "10";
         });
 
-        // タイマーリストの一覧描画
-        onValue(ref(db, 'timers'), (snapshot) => {
+        // 選択肢リストを描画する関数（絞り込み対応）
+        function renderTimerList() {
             timerListContainer.innerHTML = "";
-            const data = snapshot.val() || {};
-            ['site_a', 'site_b', 'site_c'].forEach(site => {
-                const siteName = site === 'site_a' ? 'SITE A (赤)' : site === 'site_b' ? 'SITE B (黄)' : 'SITE C (青)';
-                if(data[site]) {
-                    Object.keys(data[site]).forEach(key => {
-                        const item = data[site][key];
-                        const m = Math.floor(item.duration / 60);
-                        const s = item.duration % 60;
-                        const div = document.createElement('div');
-                        div.className = "flex justify-between items-center bg-gray-50 p-2 rounded-lg border text-sm font-bold";
-                        div.innerHTML = `
-                            <span>[${siteName}] ${item.name} (${m}分${s}秒) - ${item.points}pt</span>
-                            <button class="text-rose-500 hover:text-rose-700 font-black">削除</button>
-                        `;
-                        div.querySelector('button').addEventListener('click', () => {
-                            remove(ref(db, `timers/${site}/${key}`));
-                        });
-                        timerListContainer.appendChild(div);
+            const selectedSite = filterSiteSelect.value; // 現在選ばれている絞り込みサイト
+            
+            if (allTimersData[selectedSite]) {
+                Object.keys(allTimersData[selectedSite]).forEach(key => {
+                    const item = allTimersData[selectedSite][key];
+                    const m = Math.floor(item.duration / 60);
+                    const s = item.duration % 60;
+                    const div = document.createElement('div');
+                    div.className = "flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-200 text-sm font-bold shadow-sm";
+                    div.innerHTML = `
+                        <div class="flex flex-col">
+                            <span class="text-gray-800">${item.name}</span>
+                            <span class="text-xs text-gray-400">${m}分${s}秒 / ${item.points}pt</span>
+                        </div>
+                        <button class="text-rose-500 hover:text-rose-700 font-black px-2 py-1 bg-rose-50 hover:bg-rose-100 rounded-lg text-xs transition">削除</button>
+                    `;
+                    div.querySelector('button').addEventListener('click', () => {
+                        remove(ref(db, `timers/${selectedSite}/${key}`));
                     });
-                }
-            });
+                    timerListContainer.appendChild(div);
+                });
+            } else {
+                timerListContainer.innerHTML = `<p class="text-center text-xs text-gray-400 py-4 font-bold">登録されているタイマーはありません</p>`;
+            }
+        }
+
+        // Firebaseからタイマーデータを取得して保持
+        onValue(ref(db, 'timers'), (snapshot) => {
+            allTimersData = snapshot.val() || {};
+            renderTimerList(); // データ更新時に再描画
         });
+
+        // 絞り込みプルダウンが切り替わったら再描画
+        filterSiteSelect.addEventListener('change', renderTimerList);
 
         // メニューの開閉
         menuBtn.addEventListener('click', () => menuModal.classList.remove('hidden'));
@@ -167,23 +179,19 @@
             updateDisplay();
         }
 
-        // ゲーム終了時の猶予処理
         function endGameSequence() {
             clearInterval(mainTimer);
             isRunning = false;
             startPauseBtn.textContent = '開始';
             startPauseBtn.className = startPauseBtn.className.replace('bg-amber-500', 'bg-emerald-500');
-            
-            // indexは00:00固定
             updateDisplay();
 
-            // 終了時ルール: 10秒間だけ「grace(終了猶予)」状態にし、site-〇側で判定を可能にする
             syncGameState('grace');
             timeupScreen.classList.remove('hidden');
 
             setTimeout(() => {
-                syncGameState('idle'); // 10秒経ったら完全にロック
-            }, 1000); // 10秒
+                syncGameState('idle');
+            }, 10000); // 10秒の猶予
         }
 
         startPauseBtn.addEventListener('click', () => {
@@ -193,19 +201,16 @@
             }
 
             if (isRunning) {
-                // 一時停止
                 clearInterval(mainTimer);
                 isRunning = false;
                 startPauseBtn.textContent = '開始';
                 startPauseBtn.className = startPauseBtn.className.replace('bg-amber-500', 'bg-emerald-500');
                 syncGameState('idle');
             } else {
-                // 開始時の3, 2, 1カウントダウン処理
                 countdownOverlay.classList.remove('hidden');
                 let count = 3;
                 countdownNumber.textContent = count;
                 
-                // 3のカウントが始まった瞬間に、site-〇側のロックを解除（状態: counting）
                 syncGameState('counting');
 
                 const countInterval = setInterval(() => {
@@ -216,12 +221,11 @@
                         clearInterval(countInterval);
                         countdownOverlay.classList.add('hidden');
                         
-                        // 本番タイマースタート
                         mainTimer = setInterval(tick, 1000);
                         startPauseBtn.textContent = '一時停止';
                         startPauseBtn.className = startPauseBtn.className.replace('bg-emerald-500', 'bg-amber-500');
                         isRunning = true;
-                        syncGameState('active'); // 状態: アクティブ
+                        syncGameState('active');
                     }
                 }, 1000);
             }
@@ -238,7 +242,7 @@
         });
 
         setTimeBtn.addEventListener('click', () => {
-            baseTime = (parseInt(selectMinutes.value)||0)*60 + (parseInt(selectSeconds.value)||0);
+            baseTime = (parseInt(document.getElementById('input-minutes').value)||0)*60 + (parseInt(document.getElementById('input-seconds').value)||0);
             currentTime = baseTime;
             updateDisplay();
         });
@@ -258,7 +262,7 @@
         backBtn.addEventListener('click', () => { timeupScreen.classList.add('hidden'); resetBtn.click(); });
         updateDisplay();
 
-        // --- 各サイトの色制御の監視 ---
+        // --- 🎨 各サイトの色制御の監視 ---
         window.siteStates = { a: {red:false}, b: {yellow:false}, c: {blue:false} };
         onValue(ref(db, 'site_a/red'), (s) => { window.siteStates.a.red = s.val()===true; applyStyles('a'); });
         onValue(ref(db, 'site_b/yellow'), (s) => { window.siteStates.b.yellow = s.val()===true; applyStyles('b'); });
@@ -267,7 +271,7 @@
         window.applyStyles = function(site) {
             const card = document.getElementById(`card-${site}`);
             const state = window.siteStates[site];
-            card.classList.remove('color-red', 'color-yellow', 'color-blue', 'color-mixed', 'opacity-20', 'border-gray-200');
+            card.classList.remove('color-red', 'color-yellow', 'color-blue', 'opacity-20', 'border-gray-200');
             const activeColors = Object.keys(state).filter(c => state[c]);
             if (activeColors.length === 0) {
                 card.classList.add('opacity-20', 'border-gray-200');
@@ -298,13 +302,8 @@
         <button id="back-btn" class="absolute bottom-10 right-10 px-8 py-4 bg-white text-gray-900 text-lg font-black rounded-xl shadow-2xl">戻る</button>
     </div>
 
-    <div class="absolute top-6 right-6 z-30 flex items-center space-x-6 bg-white/80 backdrop-blur p-3 rounded-2xl border border-gray-200 shadow-sm">
-        <div class="text-right">
-            <span class="text-xs font-black text-gray-400 block tracking-wider">TOTAL SCORE</span>
-            <span id="score-display" class="text-3xl font-mono font-black text-blue-600">0</span><span class="text-sm font-bold text-gray-500 ml-1">pt</span>
-        </div>
-        <button id="score-reset-btn" class="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-xs font-black rounded-xl transition">スコアリセット</button>
-        <button id="menu-btn" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm font-black rounded-xl shadow transition">⚙️ メニュー</button>
+    <div class="absolute top-6 right-6 z-30">
+        <button id="menu-btn" class="px-5 py-3 bg-gray-800 hover:bg-gray-700 text-white text-sm font-black rounded-2xl shadow transition">⚙️ 設定メニュー</button>
     </div>
 
     <div id="menu-modal" class="hidden fixed inset-0 bg-black/50 flex justify-center items-center z-50">
@@ -342,30 +341,57 @@
                         </div>
                     </div>
                 </div>
-                <button id="add-timer-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl shadow transition">このタイマーを追加して同期 (完了)</button>
+                <button id="add-timer-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl shadow transition">このタイマーを追加して同期</button>
             </div>
 
-            <label class="block text-xs font-black text-gray-400 mb-2">現在登録されている選択肢一覧</label>
-            <div id="timer-list-container" class="space-y-2 overflow-y-auto flex-1 pr-1">
+            <div class="flex flex-col flex-1 min-h-0">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="text-xs font-black text-gray-400">現在登録されている選択肢一覧</label>
+                    <select id="filter-site" class="p-1 border rounded-lg text-xs font-bold bg-gray-50">
+                        <option value="site_a">SITE A (赤)</option>
+                        <option value="site_b">SITE B (黄)</option>
+                        <option value="site_c">SITE C (青)</option>
+                    </select>
                 </div>
+                <div id="timer-list-container" class="space-y-2 overflow-y-auto flex-1 pr-1">
+                    </div>
+            </div>
         </div>
     </div>
 
     <div id="main-content" class="flex h-screen w-screen">
-        <div class="w-1/3 flex flex-col justify-center items-center border-r border-gray-200 p-6 bg-white z-10 shadow-lg">
-            <div class="mb-10 bg-gray-100 p-1.5 rounded-xl flex space-x-2 border border-gray-200">
+        <div class="w-1/3 flex flex-col justify-between items-center border-r border-gray-200 py-10 px-6 bg-white z-10 shadow-lg">
+            
+            <div class="bg-gray-100 p-1.5 rounded-xl flex space-x-2 border border-gray-200">
                 <button id="mode-down-btn" class="px-6 py-2.5 rounded-lg bg-blue-600 text-white font-black text-sm shadow-sm transition">カウントダウン</button>
                 <button id="mode-up-btn" class="px-6 py-2.5 rounded-lg text-gray-500 hover:text-gray-800 font-black text-sm transition">カウントアップ</button>
             </div>
-            <div id="timer-display" class="text-[10rem] font-mono font-black tracking-tighter text-gray-900 mb-6 select-none leading-none">00:10</div>
-            <div id="setting-area" class="flex items-center space-x-3 mb-12 text-lg bg-gray-50 p-4 rounded-2xl border border-gray-200 shadow-inner">
-                <input id="input-minutes" type="number" min="0" max="60" value="0" class="w-16 p-1 text-center font-bold border rounded-lg">分
-                <input id="input-seconds" type="number" min="0" max="59" value="10" class="w-16 p-1 text-center font-bold border rounded-lg">秒
-                <button id="set-time-btn" class="ml-3 px-4 py-1.5 bg-gray-800 text-white text-xs font-black rounded-xl">設定</button>
+            
+            <div class="w-full flex flex-col items-center">
+                <div id="timer-display" class="text-[10rem] font-mono font-black tracking-tighter text-gray-900 select-none leading-none mb-4">00:10</div>
+                
+                <div id="setting-area" class="flex items-center space-x-2 text-sm bg-gray-50 p-3 rounded-2xl border border-gray-200 shadow-inner mb-6">
+                    <input id="input-minutes" type="number" min="0" max="60" value="0" class="w-12 p-1 text-center font-bold border rounded-lg bg-white"><span>分</span>
+                    <input id="input-seconds" type="number" min="0" max="59" value="10" class="w-12 p-1 text-center font-bold border rounded-lg bg-white"><span>秒</span>
+                    <button id="setTimeBtn" onclick="document.getElementById('set-time-btn').click()" class="hidden"></button>
+                    <button id="set-time-btn" class="ml-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-xs font-black rounded-xl">設定</button>
+                </div>
+
+                <div class="flex space-x-4">
+                    <button id="start-pause-btn" class="w-36 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white text-lg font-black rounded-2xl shadow-md transition">開始</button>
+                    <button id="reset-btn" class="w-36 py-3.5 bg-rose-500 hover:bg-rose-600 text-white text-lg font-black rounded-2xl shadow-md transition">リセット</button>
+                </div>
             </div>
-            <div class="flex space-x-6">
-                <button id="start-pause-btn" class="w-40 py-4 bg-emerald-500 text-white text-xl font-black rounded-2xl shadow-md transition">開始</button>
-                <button id="reset-btn" class="w-40 py-4 bg-rose-500 text-white text-xl font-black rounded-2xl shadow-md transition">リセット</button>
+
+            <div class="w-full border-t pt-6 text-center">
+                <span class="text-xs font-black text-gray-400 tracking-widest block mb-1">TOTAL SCORE</span>
+                <div class="flex items-center justify-center space-x-4">
+                    <div class="leading-none">
+                        <span id="score-display" class="text-7xl font-mono font-black text-blue-600 leading-none">0</span>
+                        <span class="text-xl font-black text-gray-500 ml-1">pt</span>
+                    </div>
+                    <button id="score-reset-btn" class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-black rounded-xl border transition">リセット</button>
+                </div>
             </div>
         </div>
 
