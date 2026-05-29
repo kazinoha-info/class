@@ -8,7 +8,7 @@
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, runTransaction, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         // 🔴ここにあなたのFirebase情報を貼り付けてください
         const firebaseConfig = {
@@ -34,6 +34,7 @@
         let subTimeLeft = 0;         // 挑戦中のタイマーの残り時間
         let graceTimeout = null;     // 2秒の猶予用タイマー
         let isWaitingForMain = false;// メインの開始を待っている（予約）状態フラグ
+        let isInitialized = false;   // 初回読み込みチェック用
 
         // --- DOM要素 ---
         const overlay = document.getElementById('lock-overlay');
@@ -51,14 +52,11 @@
             handleGameStateChange();
         });
 
-        // 状態変化による制御
         function handleGameStateChange() {
             if (gameState === 'counting' || gameState === 'active') {
-                // ラグ対策：3,2,1（counting）の時点からロック自体は解除する
                 overlay.classList.add('hidden');
                 document.getElementById('main-container').classList.remove('opacity-30', 'pointer-events-none');
                 
-                // 【NEW】もし「予約待機状態」のときに、メインが本番スタート（active）したらカウントダウンを動かす
                 if (gameState === 'active' && isWaitingForMain) {
                     runSubTimerLoop();
                 }
@@ -70,6 +68,39 @@
                 lockScreen("メインタイマー開始を待っています...");
                 resetActiveTimer();
             }
+
+            // 【NEW】ゲーム状態が取れたあと、一回だけ「直前の挑戦データ」があるかチェックして復帰させる
+            if (!isInitialized) {
+                isInitialized = true;
+                checkRecovery();
+            }
+        }
+
+        // 【NEW】誤更新からの復帰チェック
+        function checkRecovery() {
+            get(ref(db, `${MY_SITE}/active`)).then((snapshot) => {
+                const savedActive = snapshot.val();
+                if (savedActive && (gameState === 'active' || gameState === 'counting')) {
+                    console.log("前回の挑戦データを検出。復帰します：", savedActive);
+                    activeTimer = savedActive.timer;
+                    subTimeLeft = savedActive.timeLeft;
+
+                    // UIを挑戦中へ変更
+                    timerListContainer.classList.add('hidden');
+                    activeSection.classList.remove('hidden');
+                    activeName.textContent = activeTimer.name;
+                    successBtn.disabled = false; failBtn.disabled = false;
+
+                    updateSubDisplay();
+
+                    if (gameState === 'counting') {
+                        isWaitingForMain = true;
+                    } else {
+                        // メインがすでに動いていれば、その残り時間からカウントダウン再開
+                        runSubTimerLoop();
+                    }
+                }
+            });
         }
 
         function lockScreen(message) {
@@ -105,9 +136,7 @@
                         <span class="text-xl font-black text-gray-800">${item.name}</span>
                         <span class="text-sm font-bold text-gray-400 mt-1">目標時間: ${m}分${s}秒</span>
                     </div>
-                    <div class="bg-red-50 text-red-600 px-4 py-2 rounded-xl font-black text-lg">
-                        +${item.points}pt
-                    </div>
+                    <div class="bg-red-50 text-red-600 px-4 py-2 rounded-xl font-black text-lg">+${item.points}pt</div>
                 `;
 
                 button.addEventListener('click', () => {
@@ -119,36 +148,44 @@
             });
         }
 
-        // --- ⏱️ 3. 個別タイマーの開始（予約 または 即時カウント） ---
+        // --- ⏱️ 3. 個別タイマーの開始 ---
         function startSubTimer(timer) {
             activeTimer = timer;
             subTimeLeft = timer.duration;
             
-            // 画面を挑戦中に切り替え
             timerListContainer.classList.add('hidden');
             activeSection.classList.remove('hidden');
             activeName.textContent = timer.name;
             
-            successBtn.disabled = false;
-            failBtn.disabled = false;
+            successBtn.disabled = false; failBtn.disabled = false;
             successBtn.className = successBtn.className.replace('opacity-50', 'hover:bg-emerald-600');
             failBtn.className = failBtn.className.replace('opacity-50', 'hover:bg-rose-600');
 
             updateSubDisplay();
-            // 初期時間を即座にFirebaseに送信（indexの見た目を同期）
-            set(ref(db, `${MY_SITE}/timeLeft`), subTimeLeft);
+            
+            // 【NEW】残り秒数単体だけでなく、復帰用に「全体データ」をFirebaseに書き込む
+            saveStateToFirebase();
 
-            // 【NEW】メインタイマーがまだ始まっていない（3,2,1カウントダウン中など）なら、予約状態にして待機
             if (gameState === 'counting') {
                 isWaitingForMain = true;
-                console.log("メイン開始前のため、予約待機状態にします。");
             } else {
-                // すでにメインが始まっていれば、即座にカウントダウン開始
                 runSubTimerLoop();
             }
         }
 
-        // 【NEW】実際のカウントダウン処理を関数として独立化
+        // 【NEW】Firebaseに現在の詳細ステータスを退避させる関数
+        function saveStateToFirebase() {
+            set(ref(db, `${MY_SITE}/timeLeft`), subTimeLeft);
+            if (activeTimer) {
+                set(ref(db, `${MY_SITE}/active`), {
+                    timer: activeTimer,
+                    timeLeft: subTimeLeft
+                });
+            } else {
+                set(ref(db, `${MY_SITE}/active`), null);
+            }
+        }
+
         function runSubTimerLoop() {
             isWaitingForMain = false;
             if (countdownInterval) clearInterval(countdownInterval);
@@ -156,7 +193,9 @@
             countdownInterval = setInterval(() => {
                 subTimeLeft--;
                 updateSubDisplay();
-                set(ref(db, `${MY_SITE}/timeLeft`), subTimeLeft);
+                
+                // 【NEW】毎秒の状態保存をこちらに集約
+                saveStateToFirebase();
 
                 if (subTimeLeft <= 0) {
                     clearInterval(countdownInterval);
@@ -168,14 +207,12 @@
         function updateSubDisplay() {
             const m = Math.floor(Math.abs(subTimeLeft) / 60);
             const s = Math.floor(Math.abs(subTimeLeft) % 60);
-            
-            // 【NEW】予約待機中なら文字を点滅させない、または青っぽくして「待機中」と分かりやすくしても良いですが、ここではシンプルに表示
             activeTimeDisplay.textContent = (subTimeLeft < 0 ? '-' : '') + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
             
             if (isWaitingForMain) {
-                activeTimeDisplay.className = "text-7xl font-mono font-black text-amber-500 animate-pulse"; // 待機中はオレンジ点滅
+                activeTimeDisplay.className = "text-7xl font-mono font-black text-amber-500 animate-pulse";
             } else if (subTimeLeft <= 5) {
-                activeTimeDisplay.className = "text-7xl font-mono font-black text-rose-600 animate-pulse";   // タイムアップ寸前は赤点滅
+                activeTimeDisplay.className = "text-7xl font-mono font-black text-rose-600 animate-pulse";
             } else {
                 activeTimeDisplay.className = "text-7xl font-mono font-black text-gray-900";
             }
@@ -197,8 +234,7 @@
             clearTimeout(graceTimeout);
             clearInterval(countdownInterval);
             
-            successBtn.disabled = true;
-            failBtn.disabled = true;
+            successBtn.disabled = true; failBtn.disabled = true;
 
             if (isSuccess && activeTimer) {
                 const scoreRef = ref(db, 'game/score');
@@ -219,7 +255,8 @@
             subTimeLeft = 0;
             isWaitingForMain = false;
 
-            set(ref(db, `${MY_SITE}/timeLeft`), 0);
+            // 【NEW】リセット時は退避データも消去
+            saveStateToFirebase();
 
             activeSection.classList.add('hidden');
             timerListContainer.classList.remove('hidden');
