@@ -3,15 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>メインダッシュボード (Light Mode)</title>
+    <title>メインダッシュボード</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 白背景に映える、鮮やかなネオン風発光エフェクト */
         .color-red { background-color: #fef2f2; border-color: #ef4444; color: #dc2626; box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3); }
         .color-yellow { background-color: #fefce8; border-color: #eab308; color: #ca8a04; box-shadow: 0 10px 30px rgba(234, 179, 8, 0.3); }
         .color-blue { background-color: #eff6ff; border-color: #3b82f6; color: #2563eb; box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3); }
         
-        /* 複数選択（同時押し）された時のグラデーション枠 */
         .color-mixed { 
             border-color: transparent; 
             background-image: linear-gradient(#ffffff, #ffffff), linear-gradient(135deg, #ef4444, #eab308, #3b82f6); 
@@ -43,10 +41,13 @@
             <div id="timer-display" class="text-[10rem] font-mono font-black tracking-tighter text-gray-900 mb-6 select-none leading-none">00:10</div>
             
             <div id="setting-area" class="flex items-center space-x-3 mb-12 text-lg bg-gray-50 p-4 rounded-2xl border border-gray-200 shadow-inner transition-all duration-300">
-                <input id="input-minutes" type="number" min="0" max="999" value="0" class="w-20 bg-white border border-gray-300 text-center font-black text-gray-800 text-2xl rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                
+                <select id="select-minutes" class="w-24 bg-white border border-gray-300 text-center font-black text-gray-800 text-2xl rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer appearance-none"></select>
                 <span class="text-gray-500 font-black">分</span>
-                <input id="input-seconds" type="number" min="0" max="59" value="10" class="w-20 bg-white border border-gray-300 text-center font-black text-gray-800 text-2xl rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                
+                <select id="select-seconds" class="w-24 bg-white border border-gray-300 text-center font-black text-gray-800 text-2xl rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer appearance-none"></select>
                 <span class="text-gray-500 font-black">秒</span>
+                
                 <button id="set-time-btn" class="ml-3 px-5 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm font-black rounded-xl shadow transition">設定</button>
             </div>
 
@@ -57,7 +58,6 @@
         </div>
 
         <div class="w-2/3 flex justify-center items-center p-8 bg-gray-50 relative">
-            
             <div class="relative w-[750px] h-[600px]">
                 
                 <div id="card-a" class="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center bg-white border-4 border-gray-200 p-8 rounded-[2.5rem] w-80 shadow-xl transition-all duration-500">
@@ -100,12 +100,34 @@
                 </div>
 
             </div>
-
         </div>
 
     </div>
 
     <script>
+        // --- ⚙️ プルダウンの選択肢を自動生成 ---
+        const selectMinutes = document.getElementById('select-minutes');
+        const selectSeconds = document.getElementById('select-seconds');
+
+        // 分: 00分 ～ 60分
+        for (let i = 0; i <= 60; i++) {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = String(i).padStart(2, '0');
+            if (i === 0) opt.selected = true; // 初期値は0分
+            selectMinutes.appendChild(opt);
+        }
+
+        // 秒: 00秒 ～ 59秒
+        for (let i = 0; i <= 59; i++) {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = String(i).padStart(2, '0');
+            if (i === 10) opt.selected = true; // 初期値は10秒（テスト用）
+            selectSeconds.appendChild(opt);
+        }
+
+
         // --- メインタイマー制御 ---
         let timer = null; let isRunning = false; let mode = 'countdown'; let baseTime = 10; let currentTime = baseTime;
         const display = document.getElementById('timer-display');
@@ -113,10 +135,8 @@
         const resetBtn = document.getElementById('reset-btn');
         const modeDownBtn = document.getElementById('mode-down-btn');
         const modeUpBtn = document.getElementById('mode-up-btn');
-        const inputMinutes = document.getElementById('input-minutes');
-        const inputSeconds = document.getElementById('input-seconds');
         const setTimeBtn = document.getElementById('set-time-btn');
-        const settingArea = document.getElementById('setting-area'); // 設定エリアのコンテナ
+        const settingArea = document.getElementById('setting-area');
         const timeupScreen = document.getElementById('timeup-screen');
         const backBtn = document.getElementById('back-btn');
 
@@ -135,37 +155,43 @@
             else { 
                 timer = setInterval(tick, 1000); 
                 startPauseBtn.textContent = '一時停止'; 
-                startPauseBtn.className = startPauseBtn.className.replace('bg-emerald-500', 'bg-amber-500'); // オレンジ色に
+                startPauseBtn.className = startPauseBtn.className.replace('bg-emerald-500', 'bg-amber-500'); 
                 isRunning = true; 
             } 
         });
         
         resetBtn.addEventListener('click', () => { pauseTimer(); currentTime = baseTime; updateDisplay(); });
-        setTimeBtn.addEventListener('click', () => { pauseTimer(); baseTime = (parseInt(inputMinutes.value)||0)*60 + (parseInt(inputSeconds.value)||0); currentTime = baseTime; updateDisplay(); });
         
-        // カウントダウン選択時：設定エリアを表示する
+        // 設定ボタンを押した時、プルダウンの値を取得してセット
+        setTimeBtn.addEventListener('click', () => { 
+            pauseTimer(); 
+            baseTime = (parseInt(selectMinutes.value)||0)*60 + (parseInt(selectSeconds.value)||0); 
+            currentTime = baseTime; 
+            updateDisplay(); 
+        });
+        
         modeDownBtn.addEventListener('click', () => { 
             if (mode === 'countdown') return; 
             mode = 'countdown'; 
             modeDownBtn.classList.add('bg-blue-600','text-white'); modeDownBtn.classList.remove('text-gray-500');
             modeUpBtn.classList.remove('bg-blue-600','text-white'); modeUpBtn.classList.add('text-gray-500');
-            settingArea.classList.remove('hidden'); // ✨ 表示
+            settingArea.classList.remove('hidden'); 
             resetBtn.click(); 
         });
         
-        // カウントアップ選択時：設定エリアを消す
         modeUpBtn.addEventListener('click', () => { 
             if (mode === 'countup') return; 
             mode = 'countup'; 
             modeUpBtn.classList.add('bg-blue-600','text-white'); modeUpBtn.classList.remove('text-gray-500');
             modeDownBtn.classList.remove('bg-blue-600','text-white'); modeDownBtn.classList.add('text-gray-500');
-            settingArea.classList.add('hidden'); // ✨ 非表示（消える）
+            settingArea.classList.add('hidden'); 
             baseTime = 0; 
             resetBtn.click(); 
         });
         
         backBtn.addEventListener('click', () => { timeupScreen.classList.add('hidden'); resetBtn.click(); });
         updateDisplay();
+
 
         // --- 🎨 色変化の制御 ---
         const siteStates = {
@@ -192,19 +218,14 @@
             const activeColors = Object.keys(state).filter(color => state[color]);
 
             if (activeColors.length === 0) {
-                // 「なし」の時はさらに薄く（不透明度20%）、文字色も薄いグレーに
                 card.classList.add('opacity-20', 'border-gray-200', 'text-gray-300');
             } else {
                 card.classList.remove('opacity-20');
-                if (activeColors.length === 1) { 
-                    card.classList.add(`color-${activeColors[0]}`); 
-                } else { 
-                    card.classList.add('color-mixed'); 
-                }
+                if (activeColors.length === 1) { card.classList.add(`color-${activeColors[0]}`); } 
+                else { card.classList.add('color-mixed'); }
             }
         }
 
-        // 初期化：すべて最初は「なし」
         clearColor('a'); clearColor('b'); clearColor('c');
     </script>
 </body>
