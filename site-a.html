@@ -24,19 +24,16 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        // --- この端末の識別設定 ---
         const MY_SITE = 'site_a';
 
-        // --- 全局状態 ---
-        let gameState = 'idle';      // idle, counting, active, grace
-        let activeTimer = null;      // 現在挑戦中のタイマーオブジェクト
-        let countdownInterval = null;// この端末のタイマー用
-        let subTimeLeft = 0;         // 挑戦中のタイマーの残り時間
-        let graceTimeout = null;     // 2秒の猶予用タイマー
-        let isWaitingForMain = false;// メインの開始を待っている（予約）状態フラグ
-        let isInitialized = false;   // 初回読み込みチェック用
+        let gameState = 'idle';      
+        let activeTimer = null;      
+        let countdownInterval = null;
+        let subTimeLeft = 0;         
+        let graceTimeout = null;     
+        let isWaitingForMain = false;
+        let isInitialized = false;
 
-        // --- DOM要素 ---
         const overlay = document.getElementById('lock-overlay');
         const overlayText = document.getElementById('lock-text');
         const timerListContainer = document.getElementById('timer-list');
@@ -46,7 +43,7 @@
         const successBtn = document.getElementById('success-btn');
         const failBtn = document.getElementById('fail-btn');
 
-        // --- 📡 1. メインのゲーム状態を監視 ---
+        // メインゲーム状態の監視
         onValue(ref(db, 'game/state'), (snapshot) => {
             gameState = snapshot.val() || 'idle';
             handleGameStateChange();
@@ -57,6 +54,7 @@
                 overlay.classList.add('hidden');
                 document.getElementById('main-container').classList.remove('opacity-30', 'pointer-events-none');
                 
+                // 予約待機中にメインが始まったら、通常通りカウントダウン開始
                 if (gameState === 'active' && isWaitingForMain) {
                     runSubTimerLoop();
                 }
@@ -69,35 +67,49 @@
                 resetActiveTimer();
             }
 
-            // 【NEW】ゲーム状態が取れたあと、一回だけ「直前の挑戦データ」があるかチェックして復帰させる
+            // 初回読み込み時に復帰処理を走らせる
             if (!isInitialized) {
                 isInitialized = true;
                 checkRecovery();
             }
         }
 
-        // 【NEW】誤更新からの復帰チェック
+        // 🔄 【NEW】リロードからの復帰＆経過時間・ラグの自動補正ロジック
         function checkRecovery() {
             get(ref(db, `${MY_SITE}/active`)).then((snapshot) => {
                 const savedActive = snapshot.val();
                 if (savedActive && (gameState === 'active' || gameState === 'counting')) {
-                    console.log("前回の挑戦データを検出。復帰します：", savedActive);
                     activeTimer = savedActive.timer;
-                    subTimeLeft = savedActive.timeLeft;
+                    isWaitingForMain = savedActive.isWaitingForMain;
 
-                    // UIを挑戦中へ変更
+                    // UIの切り替え
                     timerListContainer.classList.add('hidden');
                     activeSection.classList.remove('hidden');
                     activeName.textContent = activeTimer.name;
                     successBtn.disabled = false; failBtn.disabled = false;
 
-                    updateSubDisplay();
-
-                    if (gameState === 'counting') {
-                        isWaitingForMain = true;
+                    if (isWaitingForMain) {
+                        // 予約状態のままリロードされたなら時間は減っていない
+                        subTimeLeft = savedActive.timeLeft;
+                        updateSubDisplay();
                     } else {
-                        // メインがすでに動いていれば、その残り時間からカウントダウン再開
-                        runSubTimerLoop();
+                        // 【ここがポイント】
+                        // 「今」の時刻と、「リロード前に最後にFirebaseへ書き込んだ時刻」の差を出す（リロードにかかった秒数）
+                        const now = Date.now();
+                        const timeLostSeconds = Math.floor((now - savedActive.updatedAt) / 1000);
+                        
+                        // 止まっていた秒数分、残り時間をマイナスして同期（フライング・ラグの帳消し）
+                        subTimeLeft = savedActive.timeLeft - timeLostSeconds;
+
+                        if (subTimeLeft <= 0) {
+                            subTimeLeft = 0;
+                            updateSubDisplay();
+                            set(ref(db, `${MY_SITE}/timeLeft`), 0);
+                            triggerGracePeriod();
+                        } else {
+                            updateSubDisplay();
+                            runSubTimerLoop();
+                        }
                     }
                 }
             });
@@ -109,7 +121,7 @@
             document.getElementById('main-container').classList.add('opacity-30', 'pointer-events-none');
         }
 
-        // --- 📡 2. 管理者が登録した選択肢リストをリアルタイム同期 ---
+        // リスト同期
         onValue(ref(db, `timers/${MY_SITE}`), (snapshot) => {
             const data = snapshot.val() || {};
             renderTimerOptions(data);
@@ -117,18 +129,9 @@
 
         function renderTimerOptions(data) {
             timerListContainer.innerHTML = "";
-            const keys = Object.keys(data);
-            
-            if (keys.length === 0) {
-                timerListContainer.innerHTML = `<p class="text-center text-gray-400 font-bold py-6">現在選択できるタイマーがありません</p>`;
-                return;
-            }
-
-            keys.forEach(key => {
+            Object.keys(data).forEach(key => {
                 const item = data[key];
-                const m = Math.floor(item.duration / 60);
-                const s = item.duration % 60;
-
+                const m = Math.floor(item.duration / 60); const s = item.duration % 60;
                 const button = document.createElement('button');
                 button.className = "w-full text-left bg-white p-5 rounded-2xl border-2 border-gray-200 active:border-red-500 shadow-sm active:shadow-md transition flex justify-between items-center";
                 button.innerHTML = `
@@ -138,17 +141,15 @@
                     </div>
                     <div class="bg-red-50 text-red-600 px-4 py-2 rounded-xl font-black text-lg">+${item.points}pt</div>
                 `;
-
                 button.addEventListener('click', () => {
-                    if (activeTimer) return alert("現在のタイマーを終了（成功/失敗）させてください！");
+                    if (activeTimer) return alert("現在のタイマーを終了させてください！");
                     startSubTimer(item);
                 });
-
                 timerListContainer.appendChild(button);
             });
         }
 
-        // --- ⏱️ 3. 個別タイマーの開始 ---
+        // 個別タイマー開始
         function startSubTimer(timer) {
             activeTimer = timer;
             subTimeLeft = timer.duration;
@@ -156,30 +157,29 @@
             timerListContainer.classList.add('hidden');
             activeSection.classList.remove('hidden');
             activeName.textContent = timer.name;
-            
             successBtn.disabled = false; failBtn.disabled = false;
-            successBtn.className = successBtn.className.replace('opacity-50', 'hover:bg-emerald-600');
-            failBtn.className = failBtn.className.replace('opacity-50', 'hover:bg-rose-600');
 
             updateSubDisplay();
-            
-            // 【NEW】残り秒数単体だけでなく、復帰用に「全体データ」をFirebaseに書き込む
-            saveStateToFirebase();
 
             if (gameState === 'counting') {
                 isWaitingForMain = true;
+                saveStateToFirebase();
             } else {
+                isWaitingForMain = false;
+                saveStateToFirebase();
                 runSubTimerLoop();
             }
         }
 
-        // 【NEW】Firebaseに現在の詳細ステータスを退避させる関数
+        // 【NEW】現在の残り秒数と一緒に「そのデータを書き込んだリアルタイムの時刻」をセットで保存
         function saveStateToFirebase() {
             set(ref(db, `${MY_SITE}/timeLeft`), subTimeLeft);
             if (activeTimer) {
                 set(ref(db, `${MY_SITE}/active`), {
                     timer: activeTimer,
-                    timeLeft: subTimeLeft
+                    timeLeft: subTimeLeft,
+                    isWaitingForMain: isWaitingForMain,
+                    updatedAt: Date.now() // ← これでリロードの「空白の数秒」を割り出す
                 });
             } else {
                 set(ref(db, `${MY_SITE}/active`), null);
@@ -193,8 +193,6 @@
             countdownInterval = setInterval(() => {
                 subTimeLeft--;
                 updateSubDisplay();
-                
-                // 【NEW】毎秒の状態保存をこちらに集約
                 saveStateToFirebase();
 
                 if (subTimeLeft <= 0) {
@@ -207,7 +205,7 @@
         function updateSubDisplay() {
             const m = Math.floor(Math.abs(subTimeLeft) / 60);
             const s = Math.floor(Math.abs(subTimeLeft) % 60);
-            activeTimeDisplay.textContent = (subTimeLeft < 0 ? '-' : '') + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+            activeTimeDisplay.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
             
             if (isWaitingForMain) {
                 activeTimeDisplay.className = "text-7xl font-mono font-black text-amber-500 animate-pulse";
@@ -218,7 +216,6 @@
             }
         }
 
-        // --- ⏳ 4. 2秒の猶予ルール ---
         function triggerGracePeriod() {
             graceTimeout = setTimeout(() => {
                 alert("タイムアップ！自動的に【失敗】となりました。");
@@ -226,23 +223,19 @@
             }, 2000);
         }
 
-        // --- 🏆 5. 結果入力（成功・失敗）の処理 ---
         successBtn.addEventListener('click', () => handleOutcome(true));
         failBtn.addEventListener('click', () => handleOutcome(false));
 
         function handleOutcome(isSuccess) {
             clearTimeout(graceTimeout);
             clearInterval(countdownInterval);
-            
             successBtn.disabled = true; failBtn.disabled = true;
 
             if (isSuccess && activeTimer) {
                 const scoreRef = ref(db, 'game/score');
                 runTransaction(scoreRef, (currentScore) => {
                     return (currentScore || 0) + activeTimer.points;
-                }).then(() => {
-                    resetActiveTimer();
-                });
+                }).then(() => { resetActiveTimer(); });
             } else {
                 resetActiveTimer();
             }
@@ -255,7 +248,6 @@
             subTimeLeft = 0;
             isWaitingForMain = false;
 
-            // 【NEW】リセット時は退避データも消去
             saveStateToFirebase();
 
             activeSection.classList.add('hidden');
@@ -268,11 +260,9 @@
     </script>
 </head>
 <body class="bg-red-50 text-gray-800 font-sans min-h-screen relative p-4 select-none">
-
     <div id="lock-overlay" class="fixed inset-0 bg-red-900/90 flex flex-col justify-center items-center z-50 text-center p-6 transition-all">
         <div class="w-20 h-20 border-4 border-white/30 border-t-white rounded-full animate-spin mb-6"></div>
         <h2 id="lock-text" class="text-white text-2xl font-black tracking-wide">メインタイマー開始を待っています...</h2>
-        <p class="text-red-200 text-sm mt-2 font-bold"> index画面でカウントダウンが始まると自動で解除されます </p>
     </div>
 
     <div id="main-container" class="max-w-md mx-auto pt-4 transition-all duration-300">
@@ -285,11 +275,11 @@
         </div>
 
         <div class="space-y-3">
-            <h3 class="text-xs font-black text-red-400 tracking-wider px-1">CHOOSE A CHALLENGE / 挑戦するタイマーを選択</h3>
+            <h3 class="text-xs font-black text-red-400 tracking-wider px-1">CHOOSE A CHALLENGE</h3>
             <div id="timer-list" class="space-y-3"></div>
         </div>
 
-        <div id="active-section" class="hidden bg-white rounded-3xl border-4 border-red-500 p-6 shadow-2xl text-center space-y-6 mt-4 animate-fade-in">
+        <div id="active-section" class="hidden bg-white rounded-3xl border-4 border-red-500 p-6 shadow-2xl text-center space-y-6 mt-4">
             <div>
                 <span class="inline-block bg-red-100 text-red-600 text-xs font-black px-3 py-1 rounded-full uppercase tracking-widest mb-2">MISSION PROGRESS</span>
                 <h2 id="active-name" class="text-2xl font-black text-gray-800">---</h2>
@@ -298,10 +288,9 @@
                 <div id="active-time-display" class="text-7xl font-mono font-black text-gray-900">00:00</div>
             </div>
             <div class="grid grid-cols-2 gap-4 pt-2">
-                <button id="fail-btn" class="py-4 bg-rose-500 text-white text-xl font-black rounded-2xl shadow-lg transition active:scale-95 opacity-50">❌ 失敗</button>
-                <button id="success-btn" class="py-4 bg-emerald-500 text-white text-xl font-black rounded-2xl shadow-lg transition active:scale-95 opacity-50">⭕ 成功</button>
+                <button id="fail-btn" class="py-4 bg-rose-500 text-white text-xl font-black rounded-2xl shadow-lg transition opacity-50">❌ 失敗</button>
+                <button id="success-btn" class="py-4 bg-emerald-500 text-white text-xl font-black rounded-2xl shadow-lg transition opacity-50">⭕ 成功</button>
             </div>
-            <p class="text-xs text-gray-400 font-bold">※タイムアップ後も2秒間だけ判定を受け付けます</p>
         </div>
     </div>
 </body>
