@@ -33,6 +33,7 @@
         let countdownInterval = null;// この端末のタイマー用
         let subTimeLeft = 0;         // 挑戦中のタイマーの残り時間
         let graceTimeout = null;     // 2秒の猶予用タイマー
+        let isWaitingForMain = false;// メインの開始を待っている（予約）状態フラグ
 
         // --- DOM要素 ---
         const overlay = document.getElementById('lock-overlay');
@@ -50,10 +51,17 @@
             handleGameStateChange();
         });
 
+        // 状態変化による制御
         function handleGameStateChange() {
             if (gameState === 'counting' || gameState === 'active') {
+                // ラグ対策：3,2,1（counting）の時点からロック自体は解除する
                 overlay.classList.add('hidden');
                 document.getElementById('main-container').classList.remove('opacity-30', 'pointer-events-none');
+                
+                // 【NEW】もし「予約待機状態」のときに、メインが本番スタート（active）したらカウントダウンを動かす
+                if (gameState === 'active' && isWaitingForMain) {
+                    runSubTimerLoop();
+                }
             } else if (gameState === 'grace') {
                 overlay.classList.add('hidden');
                 overlayText.textContent = "メイン時間切れ！ラスト10秒以内に判定してください！";
@@ -111,11 +119,12 @@
             });
         }
 
-        // --- ⏱️ 3. 個別タイマーの開始とカウントダウン ---
+        // --- ⏱️ 3. 個別タイマーの開始（予約 または 即時カウント） ---
         function startSubTimer(timer) {
             activeTimer = timer;
             subTimeLeft = timer.duration;
             
+            // 画面を挑戦中に切り替え
             timerListContainer.classList.add('hidden');
             activeSection.classList.remove('hidden');
             activeName.textContent = timer.name;
@@ -126,14 +135,27 @@
             failBtn.className = failBtn.className.replace('opacity-50', 'hover:bg-rose-600');
 
             updateSubDisplay();
-            // 【NEW】開始した瞬間、初期値をFirebaseに送信
+            // 初期時間を即座にFirebaseに送信（indexの見た目を同期）
             set(ref(db, `${MY_SITE}/timeLeft`), subTimeLeft);
+
+            // 【NEW】メインタイマーがまだ始まっていない（3,2,1カウントダウン中など）なら、予約状態にして待機
+            if (gameState === 'counting') {
+                isWaitingForMain = true;
+                console.log("メイン開始前のため、予約待機状態にします。");
+            } else {
+                // すでにメインが始まっていれば、即座にカウントダウン開始
+                runSubTimerLoop();
+            }
+        }
+
+        // 【NEW】実際のカウントダウン処理を関数として独立化
+        function runSubTimerLoop() {
+            isWaitingForMain = false;
+            if (countdownInterval) clearInterval(countdownInterval);
 
             countdownInterval = setInterval(() => {
                 subTimeLeft--;
                 updateSubDisplay();
-
-                // 【NEW】毎秒、メイン画面（index）に向けて残り秒数を送信
                 set(ref(db, `${MY_SITE}/timeLeft`), subTimeLeft);
 
                 if (subTimeLeft <= 0) {
@@ -146,10 +168,14 @@
         function updateSubDisplay() {
             const m = Math.floor(Math.abs(subTimeLeft) / 60);
             const s = Math.floor(Math.abs(subTimeLeft) % 60);
+            
+            // 【NEW】予約待機中なら文字を点滅させない、または青っぽくして「待機中」と分かりやすくしても良いですが、ここではシンプルに表示
             activeTimeDisplay.textContent = (subTimeLeft < 0 ? '-' : '') + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
             
-            if (subTimeLeft <= 5) {
-                activeTimeDisplay.className = "text-7xl font-mono font-black text-rose-600 animate-pulse";
+            if (isWaitingForMain) {
+                activeTimeDisplay.className = "text-7xl font-mono font-black text-amber-500 animate-pulse"; // 待機中はオレンジ点滅
+            } else if (subTimeLeft <= 5) {
+                activeTimeDisplay.className = "text-7xl font-mono font-black text-rose-600 animate-pulse";   // タイムアップ寸前は赤点滅
             } else {
                 activeTimeDisplay.className = "text-7xl font-mono font-black text-gray-900";
             }
@@ -191,8 +217,8 @@
             clearInterval(countdownInterval);
             activeTimer = null;
             subTimeLeft = 0;
+            isWaitingForMain = false;
 
-            // 【NEW】終了したらメイン表示を「0」に戻す
             set(ref(db, `${MY_SITE}/timeLeft`), 0);
 
             activeSection.classList.add('hidden');
