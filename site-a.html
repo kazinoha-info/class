@@ -50,20 +50,15 @@
             handleGameStateChange();
         });
 
-        // 状態変化による画面ロック・解除制御
         function handleGameStateChange() {
             if (gameState === 'counting' || gameState === 'active') {
-                // 3,2,1カウントダウン開始時、またはメイン作動中はロック解除
                 overlay.classList.add('hidden');
                 document.getElementById('main-container').classList.remove('opacity-30', 'pointer-events-none');
             } else if (gameState === 'grace') {
-                // メインがタイムアップ（10秒のラスト判定猶予）
                 overlay.classList.add('hidden');
                 overlayText.textContent = "メイン時間切れ！ラスト10秒以内に判定してください！";
-                // 挑戦中じゃなければその時点でロック
                 if (!activeTimer) lockScreen("メインタイマー終了");
             } else {
-                // idle (待機中・終了) は完全ロック
                 lockScreen("メインタイマー開始を待っています...");
                 resetActiveTimer();
             }
@@ -107,7 +102,6 @@
                     </div>
                 `;
 
-                // 他のタイマーに挑戦中でなければ選択可能
                 button.addEventListener('click', () => {
                     if (activeTimer) return alert("現在のタイマーを終了（成功/失敗）させてください！");
                     startSubTimer(item);
@@ -122,27 +116,29 @@
             activeTimer = timer;
             subTimeLeft = timer.duration;
             
-            // UIを挑戦中モードに切り替え
             timerListContainer.classList.add('hidden');
             activeSection.classList.remove('hidden');
             activeName.textContent = timer.name;
             
-            // 成功・失敗ボタンを活性化
             successBtn.disabled = false;
             failBtn.disabled = false;
             successBtn.className = successBtn.className.replace('opacity-50', 'hover:bg-emerald-600');
             failBtn.className = failBtn.className.replace('opacity-50', 'hover:bg-rose-600');
 
             updateSubDisplay();
+            // 【NEW】開始した瞬間、初期値をFirebaseに送信
+            set(ref(db, `${MY_SITE}/timeLeft`), subTimeLeft);
 
-            // 1秒刻みのカウント
             countdownInterval = setInterval(() => {
                 subTimeLeft--;
                 updateSubDisplay();
 
+                // 【NEW】毎秒、メイン画面（index）に向けて残り秒数を送信
+                set(ref(db, `${MY_SITE}/timeLeft`), subTimeLeft);
+
                 if (subTimeLeft <= 0) {
                     clearInterval(countdownInterval);
-                    triggerGracePeriod(); // タイムアップ時の2秒猶予ルールへ
+                    triggerGracePeriod(); 
                 }
             }, 1000);
         }
@@ -152,7 +148,6 @@
             const s = Math.floor(Math.abs(subTimeLeft) % 60);
             activeTimeDisplay.textContent = (subTimeLeft < 0 ? '-' : '') + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
             
-            // タイムアップ間近、またはマイナス（猶予中）は赤文字で警告
             if (subTimeLeft <= 5) {
                 activeTimeDisplay.className = "text-7xl font-mono font-black text-rose-600 animate-pulse";
             } else {
@@ -162,9 +157,6 @@
 
         // --- ⏳ 4. 2秒の猶予ルール ---
         function triggerGracePeriod() {
-            console.log("個別タイマー終了：2秒間の猶予カウント開始");
-            
-            // 2秒（2000ミリ秒）待って、何も押されなかったら自動「失敗」
             graceTimeout = setTimeout(() => {
                 alert("タイムアップ！自動的に【失敗】となりました。");
                 handleOutcome(false);
@@ -176,7 +168,6 @@
         failBtn.addEventListener('click', () => handleOutcome(false));
 
         function handleOutcome(isSuccess) {
-            // 即座に猶予タイマーやカウントをストップ（二重押し防止）
             clearTimeout(graceTimeout);
             clearInterval(countdownInterval);
             
@@ -184,31 +175,29 @@
             failBtn.disabled = true;
 
             if (isSuccess && activeTimer) {
-                // 成功時はFirebase上のスコアに安全に加算（トランザクション処理）
                 const scoreRef = ref(db, 'game/score');
                 runTransaction(scoreRef, (currentScore) => {
                     return (currentScore || 0) + activeTimer.points;
                 }).then(() => {
-                    console.log(`${activeTimer.points}pt が加算されました！`);
                     resetActiveTimer();
                 });
             } else {
-                // 失敗時
                 resetActiveTimer();
             }
         }
 
-        // 状態のリセット（次の選択肢を選べる状態に戻す）
         function resetActiveTimer() {
             clearTimeout(graceTimeout);
             clearInterval(countdownInterval);
             activeTimer = null;
             subTimeLeft = 0;
 
+            // 【NEW】終了したらメイン表示を「0」に戻す
+            set(ref(db, `${MY_SITE}/timeLeft`), 0);
+
             activeSection.classList.add('hidden');
             timerListContainer.classList.remove('hidden');
 
-            // メインが既に終了(grace)または待機中(idle)なら画面を再ロック
             if (gameState === 'grace' || gameState === 'idle') {
                 lockScreen(gameState === 'grace' ? "メインタイマー終了" : "メインタイマー開始を待っています...");
             }
@@ -217,60 +206,40 @@
 </head>
 <body class="bg-red-50 text-gray-800 font-sans min-h-screen relative p-4 select-none">
 
-    <!-- 🔒 画面ロック用オーバーレイ層 -->
     <div id="lock-overlay" class="fixed inset-0 bg-red-900/90 flex flex-col justify-center items-center z-50 text-center p-6 transition-all">
         <div class="w-20 h-20 border-4 border-white/30 border-t-white rounded-full animate-spin mb-6"></div>
         <h2 id="lock-text" class="text-white text-2xl font-black tracking-wide">メインタイマー開始を待っています...</h2>
         <p class="text-red-200 text-sm mt-2 font-bold"> index画面でカウントダウンが始まると自動で解除されます </p>
     </div>
 
-    <!-- 📦 メインコンテンツコンテナ -->
     <div id="main-container" class="max-w-md mx-auto pt-4 transition-all duration-300">
-        
-        <!-- ヘッダー（現在のステータス） -->
         <div class="bg-red-600 text-white p-4 rounded-2xl shadow-md mb-6 flex justify-between items-center">
             <div>
                 <h1 class="text-2xl font-black tracking-wider">SITE A</h1>
                 <p class="text-xs text-red-100 font-bold mt-0.5">RED TEAM TERMINAL</p>
             </div>
-            <div class="bg-white/20 px-3 py-1.5 rounded-xl text-xs font-black">
-                通信中 🟢
-            </div>
+            <div class="bg-white/20 px-3 py-1.5 rounded-xl text-xs font-black">通信中 🟢</div>
         </div>
 
-        <!-- 📜 選択肢リスト（通常時表示） -->
         <div class="space-y-3">
             <h3 class="text-xs font-black text-red-400 tracking-wider px-1">CHOOSE A CHALLENGE / 挑戦するタイマーを選択</h3>
-            <div id="timer-list" class="space-y-3">
-                <!-- ここにFirebaseから取得した選択肢がリアルタイムに並びます -->
-            </div>
+            <div id="timer-list" class="space-y-3"></div>
         </div>
 
-        <!-- ⚡ 挑戦中アクティブ画面（タイマー選択時に出現） -->
         <div id="active-section" class="hidden bg-white rounded-3xl border-4 border-red-500 p-6 shadow-2xl text-center space-y-6 mt-4 animate-fade-in">
             <div>
                 <span class="inline-block bg-red-100 text-red-600 text-xs font-black px-3 py-1 rounded-full uppercase tracking-widest mb-2">MISSION PROGRESS</span>
                 <h2 id="active-name" class="text-2xl font-black text-gray-800">---</h2>
             </div>
-
-            <!-- カウントダウン数字 -->
             <div class="bg-gray-50 py-8 rounded-2xl border border-gray-100 shadow-inner">
                 <div id="active-time-display" class="text-7xl font-mono font-black text-gray-900">00:00</div>
             </div>
-
-            <!-- 判定ボタン（成功 / 失敗） -->
             <div class="grid grid-cols-2 gap-4 pt-2">
-                <button id="fail-btn" class="py-4 bg-rose-500 text-white text-xl font-black rounded-2xl shadow-lg transition active:scale-95 opacity-50">
-                    ❌ 失敗
-                </button>
-                <button id="success-btn" class="py-4 bg-emerald-500 text-white text-xl font-black rounded-2xl shadow-lg transition active:scale-95 opacity-50">
-                    ⭕ 成功
-                </button>
+                <button id="fail-btn" class="py-4 bg-rose-500 text-white text-xl font-black rounded-2xl shadow-lg transition active:scale-95 opacity-50">❌ 失敗</button>
+                <button id="success-btn" class="py-4 bg-emerald-500 text-white text-xl font-black rounded-2xl shadow-lg transition active:scale-95 opacity-50">⭕ 成功</button>
             </div>
             <p class="text-xs text-gray-400 font-bold">※タイムアップ後も2秒間だけ判定を受け付けます</p>
         </div>
-
     </div>
-
 </body>
 </html>
