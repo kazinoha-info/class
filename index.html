@@ -34,6 +34,12 @@
         let isScoreReset = true;
         let gameState = 'idle';
         let allTimersData = {};
+        let baseTime = 10;
+        let currentTime = baseTime;
+        let currentScore = 0;
+        let isScoreReset = true;
+        let gameState = 'idle';
+        let allTimersData = {};
 
         // --- DOM要素 ---
         const display = document.getElementById('timer-display');
@@ -45,6 +51,8 @@
         const settingArea = document.getElementById('setting-area');
         const timeupScreen = document.getElementById('timeup-screen');
         const backBtn = document.getElementById('back-btn');
+        const mainStartAudio = new Audio('https://actions.google.com/sounds/v1/alarms/air_horn.ogg'); // カウントダウン終了時の音
+        const mainTimeupAudio = new Audio('https://actions.google.com/sounds/v1/science_fiction/ambient_space_alarm.ogg'); // 全体タイムアップの音
         
         const menuBtn = document.getElementById('menu-btn');
         const menuModal = document.getElementById('menu-modal');
@@ -179,14 +187,15 @@
             updateDisplay();
         }
 
-        function endGameSequence() {
-            clearInterval(mainTimer);
-            isRunning = false;
+function endGameSequence() {
+            clearInterval(mainTimer); isRunning = false;
             startPauseBtn.textContent = '開始';
-            startPauseBtn.className = startPauseBtn.className.replace('bg-amber-500', 'bg-emerald-500');
-            updateDisplay();
-            syncGameState('grace');
             timeupScreen.classList.remove('hidden');
+            
+            // 🔊 全体タイムアップ音を再生
+            mainTimeupAudio.play().catch(e => console.log("Audio play blocked:", e));
+
+            syncGameState('grace');
             setTimeout(() => { syncGameState('idle'); }, 10000); 
         }
 
@@ -206,21 +215,19 @@
                 let count = 3;
                 countdownNumber.textContent = count;
                 syncGameState('counting');
-                const countInterval = setInterval(() => {
+const countInterval = setInterval(() => {
                     count--;
-                    if (count > 0) {
-                        countdownNumber.textContent = count;
-                    } else {
-                        clearInterval(countInterval);
-                        countdownOverlay.classList.add('hidden');
-                        mainTimer = setInterval(tick, 1000);
-                        startPauseBtn.textContent = '一時停止';
-                        startPauseBtn.className = startPauseBtn.className.replace('bg-emerald-500', 'bg-amber-500');
-                        isRunning = true;
-                        syncGameState('active');
+                    if (count > 0) { countdownNumber.textContent = count; } 
+                    else {
+                        clearInterval(countInterval); countdownOverlay.classList.add('hidden');
+                        
+                        // 🔊 3, 2, 1... GO! の開始音を再生
+                        mainStartAudio.play().catch(e => console.log("Audio play blocked:", e));
+
+                        mainTimer = setInterval(tick, 1000); isRunning = true;
+                        startPauseBtn.textContent = '一時停止'; syncGameState('active');
                     }
                 }, 1000);
-            }
         });
 
         resetBtn.addEventListener('click', () => {
