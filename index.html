@@ -165,12 +165,15 @@ const mainTimeupAudio = new Audio('timeup.mp3');
             setTimeout(() => { syncGameState('idle'); }, 10000); 
         }
 
-        startPauseBtn.addEventListener('click', () => {
+startPauseBtn.addEventListener('click', () => {
             if (!isScoreReset) return alert("スコアリセットを行わないと開始できません！");
             if (isRunning) {
                 clearInterval(mainTimer); isRunning = false;
                 startPauseBtn.textContent = '開始'; syncGameState('idle');
             } else {
+                // 🔊 【変更】「3、2、1...」のカウントダウン画面が出るのと同時にstart.mp3を再生！
+                mainStartAudio.play().catch(e => console.log("Audio play blocked:", e));
+
                 countdownOverlay.classList.remove('hidden');
                 let count = 3; countdownNumber.textContent = count;
                 syncGameState('counting');
@@ -180,7 +183,7 @@ const mainTimeupAudio = new Audio('timeup.mp3');
                     else {
                         clearInterval(countInterval); countdownOverlay.classList.add('hidden');
                         
-                        mainStartAudio.play().catch(e => console.log("Audio play blocked"));
+                        // （ここにあった再生処理を上に移動しました）
 
                         mainTimer = setInterval(tick, 1000); isRunning = true;
                         startPauseBtn.textContent = '一時停止'; syncGameState('active');
@@ -188,7 +191,6 @@ const mainTimeupAudio = new Audio('timeup.mp3');
                 }, 1000);
             }
         });
-
         resetBtn.addEventListener('click', () => {
             clearInterval(mainTimer); isRunning = false; currentTime = baseTime;
             startPauseBtn.textContent = '開始'; updateDisplay(); syncGameState('idle');
