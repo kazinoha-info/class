@@ -35,8 +35,8 @@
         let allTimersData = {};
 
         // 🔊 音声ファイルの準備（ご自身のmp3ファイル名に書き換えてください）
-        const mainStartAudio = new Audio('https://actions.google.com/sounds/v1/alarms/air_horn.ogg'); 
-        const mainTimeupAudio = new Audio('https://actions.google.com/sounds/v1/science_fiction/ambient_space_alarm.ogg'); 
+const mainStartAudio = new Audio('start.mp3'); // 3,2,1...GO!の瞬間に鳴る音
+const mainTimeupAudio = new Audio('timeup.mp3');
 
         const display = document.getElementById('timer-display');
         const startPauseBtn = document.getElementById('start-pause-btn');
