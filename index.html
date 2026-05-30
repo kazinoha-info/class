@@ -300,8 +300,13 @@
                             <span class="text-xs font-bold text-gray-500">秒</span>
                         </div>
                     </div>
-                </div>
+</div>
                 <button id="add-timer-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl shadow transition">このタイマーを追加して同期</button>
+                
+                <!-- 🔄【追加】iPadアプリ化対策の再読み込みボタン -->
+                <button onclick="window.location.reload(true);" class="w-full mt-3 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-black rounded-xl border border-gray-300 shadow-sm transition flex items-center justify-center space-x-2">
+                    <span>🔄 画面を強制再読み込み (リロード)</span>
+                </button>
             </div>
 
             <div class="flex flex-col flex-1 min-h-0">
