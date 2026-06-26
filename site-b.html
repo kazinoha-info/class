@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SITE B - プレイヤー端末</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue, runTransaction, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        // 🔴ここにあなたのFirebase情報を貼り付けてください
+        const firebaseConfig = {
+            apiKey: "AIzaSyA737hpRgZTnO0YMLAwZpVY1qTCwlkBf0c",
+            authDomain: "classkikaku-e8e88.firebaseapp.com",
+            databaseURL: "https://classkikaku-e8e88-default-rtdb.firebaseio.com",
+            projectId: "classkikaku-e8e88",
+            storageBucket: "classkikaku-e8e88.firebasestorage.app",
+            messagingSenderId: "186126264620",
+            appId: "1:186126264620:web:e865311f6e414e91492489"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // 🟨 SITE B 専用の設定
+        const MY_SITE = 'site_b';
+
+        let gameState = 'idle';      
+        let activeTimer = null;      
+        let countdownInterval = null;
+        let subTimeLeft = 0;         
+        let graceTimeout = null;     
+        let isWaitingForMain = false;
+        let isInitialized = false;
+
+        const overlay = document.getElementById('lock-overlay');
+        const overlayText = document.getElementById('lock-text');
+        const timerListContainer = document.getElementById('timer-list');
+        const activeSection = document.getElementById('active-section');
+        const activeName = document.getElementById('active-name');
+        const activeTimeDisplay = document.getElementById('active-time-display');
+        const successBtn = document.getElementById('success-btn');
+        const failBtn = document.getElementById('fail-btn');
+
+        // メインゲーム状態の監視
+        onValue(ref(db, 'game/state'), (snapshot) => {
+            gameState = snapshot.val() || 'idle';
+            handleGameStateChange();
+        });
+
+        function handleGameStateChange() {
+            if (gameState === 'counting' || gameState === 'active') {
+                overlay.classList.add('hidden');
+                document.getElementById('main-container').classList.remove('opacity-30', 'pointer-events-none');
+                
+                // 予約待機中にメインが始まったら、通常通りカウントダウン開始
+                if (gameState === 'active' && isWaitingForMain) {
+                    runSubTimerLoop();
+                }
+            } else if (gameState === 'grace') {
+                overlay.classList.add('hidden');
+                overlayText.textContent = "メイン時間切れ！ラスト10秒以内に判定してください！";
+                if (!activeTimer) lockScreen("メインタイマー終了");
+            } else {
+                lockScreen("メインタイマー開始を待っています...");
+                resetActiveTimer();
+            }
+
+            // 初回読み込み時に復帰処理を走らせる
+            if (!isInitialized) {
+                isInitialized = true;
+                checkRecovery();
+            }
+        }
+
+        // 🔄 リロードからの復帰＆経過時間・ラグの自動補正ロジック
+        function checkRecovery() {
+            get(ref(db, `${MY_SITE}/active`)).then((snapshot) => {
+                const savedActive = snapshot.val();
+                if (savedActive && (gameState === 'active' || gameState === 'counting')) {
+                    activeTimer = savedActive.timer;
+                    isWaitingForMain = savedActive.isWaitingForMain;
+
+                    // UIの切り替え
+                    timerListContainer.classList.add('hidden');
+                    activeSection.classList.remove('hidden');
+                    activeName.textContent = activeTimer.name;
+                    successBtn.disabled = false; failBtn.disabled = false;
+
+                    if (isWaitingForMain) {
+                        subTimeLeft = savedActive.timeLeft;
+                        updateSubDisplay();
+                    } else {
+                        const now = Date.now();
+                        const timeLostSeconds = Math.floor((now - savedActive.updatedAt) / 1000);
+                        
+                        subTimeLeft = savedActive.timeLeft - timeLostSeconds;
+
+                        if (subTimeLeft <= 0) {
+                            subTimeLeft = 0;
+                            updateSubDisplay();
+                            set(ref(db, `${MY_SITE}/timeLeft`), 0);
+                            triggerGracePeriod();
+                        } else {
+                            updateSubDisplay();
+                            runSubTimerLoop();
+                        }
+                    }
+                }
+            });
+        }
+
+        function lockScreen(message) {
+            overlay.classList.remove('hidden');
+            overlayText.textContent = message;
+            document.getElementById('main-container').classList.add('opacity-30', 'pointer-events-none');
+        }
+
+        // リスト同期
+        onValue(ref(db, `timers/${MY_SITE}`), (snapshot) => {
+            const data = snapshot.val() || {};
+            renderTimerOptions(data);
+        });
+
+        function renderTimerOptions(data) {
+            timerListContainer.innerHTML = "";
+            Object.keys(data).forEach(key => {
+                const item = data[key];
+                const m = Math.floor(item.duration / 60); const s = item.duration % 60;
+                const button = document.createElement('button');
+                // 🟨 アクティブ時の枠線を amber に変更
+                button.className = "w-full text-left bg-white p-5 rounded-2xl border-2 border-gray-200 active:border-amber-500 shadow-sm active:shadow-md transition flex justify-between items-center";
+                button.innerHTML = `
+                    <div class="flex flex-col">
+                        <span class="text-xl font-black text-gray-800">${item.name}</span>
+                        <span class="text-sm font-bold text-gray-400 mt-1">目標時間: ${m}分${s}秒</span>
+                    </div>
+                    <div class="bg-amber-50 text-amber-600 px-4 py-2 rounded-xl font-black text-lg">+${item.points}pt</div>
+                `;
+                button.addEventListener('click', () => {
+                    if (activeTimer) return alert("現在のタイマーを終了させてください！");
+                    startSubTimer(item);
+                });
+                timerListContainer.appendChild(button);
+            });
+        }
+
+        // 個別タイマー開始
+        function startSubTimer(timer) {
+            activeTimer = timer;
+            subTimeLeft = timer.duration;
+            
+            timerListContainer.classList.add('hidden');
+            activeSection.classList.remove('hidden');
+            activeName.textContent = timer.name;
+            successBtn.disabled = false; failBtn.disabled = false;
+
+            updateSubDisplay();
+
+            if (gameState === 'counting') {
+                isWaitingForMain = true;
+                saveStateToFirebase();
+            } else {
+                isWaitingForMain = false;
+                saveStateToFirebase();
+                runSubTimerLoop();
+            }
+        }
+
+function saveStateToFirebase() {
+            if (activeTimer) {
+                set(ref(db, MY_SITE), {
+                    timeLeft: subTimeLeft,
+                    active: {
+                        timer: activeTimer,
+                        timeLeft: subTimeLeft,
+                        isWaitingForMain: isWaitingForMain,
+                        updatedAt: Date.now()
+                    },
+                    secret: "kanta24"
+                });
+            } else {
+                set(ref(db, MY_SITE), {
+                    timeLeft: 0,
+                    active: null,
+                    secret: "kanta24"
+                });
+            }
+        }
+
+        function runSubTimerLoop() {
+            isWaitingForMain = false;
+            if (countdownInterval) clearInterval(countdownInterval);
+
+            countdownInterval = setInterval(() => {
+                subTimeLeft--;
+                updateSubDisplay();
+                saveStateToFirebase();
+
+                if (subTimeLeft <= 0) {
+                    clearInterval(countdownInterval);
+                    triggerGracePeriod(); 
+                }
+            }, 1000);
+        }
+
+        function updateSubDisplay() {
+            const m = Math.floor(Math.abs(subTimeLeft) / 60);
+            const s = Math.floor(Math.abs(subTimeLeft) % 60);
+            activeTimeDisplay.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+            
+            if (isWaitingForMain) {
+                activeTimeDisplay.className = "text-7xl font-mono font-black text-amber-500 animate-pulse";
+            } else if (subTimeLeft <= 5) {
+                activeTimeDisplay.className = "text-7xl font-mono font-black text-rose-600 animate-pulse";
+            } else {
+                activeTimeDisplay.className = "text-7xl font-mono font-black text-gray-900";
+            }
+        }
+
+        function triggerGracePeriod() {
+            graceTimeout = setTimeout(() => {
+                alert("タイムアップ！自動的に【失敗】となりました。");
+                handleOutcome(false);
+            }, 2000);
+        }
+
+        successBtn.addEventListener('click', () => handleOutcome(true));
+        failBtn.addEventListener('click', () => handleOutcome(false));
+
+        function handleOutcome(isSuccess) {
+            clearTimeout(graceTimeout);
+            clearInterval(countdownInterval);
+            successBtn.disabled = true; failBtn.disabled = true;
+
+            if (isSuccess && activeTimer) {
+                const scoreRef = ref(db, 'game/score');
+                runTransaction(scoreRef, (currentScore) => {
+                    return (currentScore || 0) + activeTimer.points;
+                }).then(() => { resetActiveTimer(); });
+            } else {
+                resetActiveTimer();
+            }
+        }
+
+        function resetActiveTimer() {
+            clearTimeout(graceTimeout);
+            clearInterval(countdownInterval);
+            activeTimer = null;
+            subTimeLeft = 0;
+            isWaitingForMain = false;
+
+            saveStateToFirebase();
+
+            activeSection.classList.add('hidden');
+            timerListContainer.classList.remove('hidden');
+
+            if (gameState === 'grace' || gameState === 'idle') {
+                lockScreen(gameState === 'grace' ? "メインタイマー終了" : "メインタイマー開始を待っています...");
+            }
+        }
+    </script>
+</head>
+<body class="bg-amber-50 text-gray-800 font-sans min-h-screen relative p-4 select-none">
+    <div id="lock-overlay" class="fixed inset-0 bg-yellow-900/90 flex flex-col justify-center items-center z-50 text-center p-6 transition-all">
+        <div class="w-20 h-20 border-4 border-white/30 border-t-white rounded-full animate-spin mb-6"></div>
+        <h2 id="lock-text" class="text-white text-2xl font-black tracking-wide">メインタイマー開始を待っています...</h2>
+    </div>
+
+    <div id="main-container" class="max-w-md mx-auto pt-4 transition-all duration-300">
+        <div class="bg-amber-500 text-white p-4 rounded-2xl shadow-md mb-6 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-black tracking-wider">SITE B</h1>
+                <p class="text-xs text-amber-100 font-bold mt-0.5">YELLOW TEAM TERMINAL</p>
+            </div>
+            <div class="bg-white/20 px-3 py-1.5 rounded-xl text-xs font-black">通信中 🟢</div>
+        </div>
+
+        <div class="space-y-3">
+            <h3 class="text-xs font-black text-amber-500 tracking-wider px-1">CHOOSE A CHALLENGE</h3>
+            <div id="timer-list" class="space-y-3"></div>
+        </div>
+
+        <div id="active-section" class="hidden bg-white rounded-3xl border-4 border-amber-500 p-6 shadow-2xl text-center space-y-6 mt-4">
+            <div>
+                <span class="inline-block bg-amber-100 text-amber-600 text-xs font-black px-3 py-1 rounded-full uppercase tracking-widest mb-2">MISSION PROGRESS</span>
+                <h2 id="active-name" class="text-2xl font-black text-gray-800">---</h2>
+            </div>
+            <div class="bg-gray-50 py-8 rounded-2xl border border-gray-100 shadow-inner">
+                <div id="active-time-display" class="text-7xl font-mono font-black text-gray-900">00:00</div>
+            </div>
+            <div class="grid grid-cols-2 gap-4 pt-2">
+                <button id="fail-btn" class="py-4 bg-rose-500 text-white text-xl font-black rounded-2xl shadow-lg transition opacity-50">❌ 失敗</button>
+                <button id="success-btn" class="py-4 bg-emerald-500 text-white text-xl font-black rounded-2xl shadow-lg transition opacity-50">⭕ 成功</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
